@@ -54,7 +54,7 @@ export function createSampleWorkbook() {
   transactions.freezeRows = 1; transactions.rowHeights.set(0, 34); transactions.colWidths.set(0, 120); transactions.colWidths.set(1, 125); transactions.colWidths.set(2, 150); transactions.colWidths.set(4, 150); transactions.colWidths.set(10, 140);
   for (let i = 0; i < 120; i++) {
     const r = i + 1, channel = channels[i % channels.length], units = 8 + (i * 17) % 83, price = [99, 149, 249, 499][i % 4], day = 46023 + (i * 3) % 89;
-    const values = [`ORD-${(2001 + i)}`, day, channel[0], channel[1], ['Gridline Team', 'Gridline Pro', 'Gridline Business', 'Gridline Enterprise'][i % 4], units, price, `=F${r + 1}*G${r + 1}`, `=H${r + 1}*Assumptions!$B$3`, `=(H${r + 1}-I${r + 1})/H${r + 1}`, channel[7]];
+    const values = [`ORD-${(2001 + i)}`, day, channel[0], channel[1], ['Spreadsheet Team', 'Spreadsheet Pro', 'Spreadsheet Business', 'Spreadsheet Enterprise'][i % 4], units, price, `=F${r + 1}*G${r + 1}`, `=H${r + 1}*Assumptions!$B$3`, `=(H${r + 1}-I${r + 1})/H${r + 1}`, channel[7]];
     values.forEach((v, c) => put(transactions, r, c, v, { fill: i % 2 ? '#f4f8f5' : '#ffffff', format: c === 1 ? 'date' : c >= 6 && c <= 8 ? 'currency' : c === 9 ? 'percent' : 'general', fontSize: 12 }));
   }
   transactions.filters = { range: { r1: 0, c1: 0, r2: 120, c2: 10 }, criteria: {} };

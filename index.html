@@ -2,28 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#176b4a"><meta name="description" content="Gridline — a local-first spreadsheet with a real formula engine and WebGPU rendering.">
-<title>Gridline — A clearer way to work</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23176b4a'/%3E%3Cpath d='M16 17h32v30H16zM16 27h32M16 37h32M27 17v30M38 17v30' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#f8faf8"><meta name="description" content="Spreadsheet editor">
+<title>Spreadsheets</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app" id="app">
-<header class="titlebar">
-  <button class="brand" data-action="file" title="Gridline home"><span class="brand-mark"><i></i><i></i><i></i><i></i></span><span>Gridline</span></button>
-  <span class="title-divider"></span>
-  <button class="autosave" id="autosave" data-action="autosave" title="Toggle local autosave">AutoSave <span class="toggle on" id="autosave-toggle"></span></button>
-  <div class="quick-actions"><button data-action="undo" title="Undo (Ctrl / ⌘ Z)" aria-label="Undo" data-icon="undo"></button><button data-action="redo" title="Redo (Ctrl / ⌘ Shift Z)" aria-label="Redo" data-icon="redo"></button></div>
-  <div class="document-title"><input id="workbook-title" aria-label="Workbook title" value="Revenue operations · FY2026"><span class="save-status" id="save-status">Saved on this device</span></div>
-  <button class="global-search" data-action="commands"><span data-icon="search"></span><span>Search tools, actions, and help</span><kbd>⌘ K</kbd></button>
-  <button class="avatar" data-action="about" title="About your local workspace">GL</button>
-</header>
-<div class="tabs-row">
-  <nav class="ribbon-tabs" aria-label="Ribbon tabs" id="ribbon-tabs">
-    <button data-action="file" class="file-tab">File</button>
-    <button data-tab="Home" class="selected">Home</button><button data-tab="Insert">Insert</button><button data-tab="Page Layout">Page Layout</button><button data-tab="Formulas">Formulas</button><button data-tab="Data">Data</button><button data-tab="Review">Review</button><button data-tab="View">View</button><button data-tab="Help">Help</button>
+<div class="tabs-row cortex-tabbar">
+  <nav class="ribbon-tabs cortex-tabstrip" aria-label="Ribbon tabs" id="ribbon-tabs">
+
+    <button data-tab="Home" class="selected">Home</button><button data-tab="Insert">Insert</button><button data-action="more-tabs" class="more-tabs-button" aria-label="Show more tabs" aria-expanded="false"><svg class="tab-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button><button data-tab="Page Layout" class="extra-tab" hidden>Page Layout</button><button data-tab="Formulas" class="extra-tab" hidden>Formulas</button><button data-tab="Data" class="extra-tab" hidden>Data</button><button data-tab="View" class="extra-tab" hidden>View</button>
   </nav>
-  <div class="document-actions"><button data-action="notes"><span data-icon="comment"></span> Notes</button><span class="editing-label"><span data-icon="edit"></span> Editing</span><button class="export-button" data-action="export"><span data-icon="export"></span> Export <span class="chevron">⌄</span></button></div>
+  <div class="document-actions cortex-toolbar-actions"><div class="document-title" hidden><input id="workbook-title" value="Revenue operations · FY2026"><span id="save-status"></span><span id="autosave-toggle" class="toggle on"></span></div><div class="quick-actions"><button data-action="undo" title="Undo (Ctrl / ⌘ Z)" aria-label="Undo" data-icon="undo"></button><button data-action="redo" title="Redo (Ctrl / ⌘ Shift Z)" aria-label="Redo" data-icon="redo"></button></div><button class="cortex-export" data-action="export"><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg><span>Export</span><svg class="export-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button></div>
 </div>
 <section class="ribbon" id="ribbon" aria-label="Formatting controls"></section>
 <div class="formula-row">
@@ -39,14 +29,13 @@
     <div class="v-scrollbar" id="v-scrollbar"><div class="scroll-thumb" id="v-thumb"></div></div>
     <div class="h-scrollbar" id="h-scrollbar"><div class="scroll-thumb" id="h-thumb"></div></div>
     <div class="sr-only" id="active-cell-description" role="gridcell" aria-live="polite"></div>
-    <div id="loading" class="loading"><span class="loading-logo">G</span><span>Opening your workspace…</span></div>
+    <div id="loading" class="loading"><span>Opening your workspace…</span></div>
   </main>
   <aside class="side-panel" id="side-panel" hidden></aside>
 </div>
 <div class="sheet-bar">
   <div class="sheet-navigation"><button data-action="prev-sheet" title="Previous sheet" aria-label="Previous sheet">‹</button><button data-action="next-sheet" title="Next sheet" aria-label="Next sheet">›</button><button data-action="sheets" title="All worksheets" aria-label="All worksheets" data-icon="list"></button></div>
   <div id="sheet-tabs" class="sheet-tabs"></div><button class="new-sheet" data-action="add-sheet" title="New worksheet" aria-label="New worksheet">＋</button>
-  <div class="sheet-bar-hint"><span class="local-dot"></span> Your data stays on your device</div>
 </div>
 <footer class="statusbar">
   <span id="mode-status">Ready</span><span class="status-divider"></span><button class="renderer-status" id="renderer-status" data-action="performance"><span class="engine-dot"></span><span id="backend-label">Starting engine</span></button>
@@ -57,9 +46,9 @@
 <div id="context-menu" class="context-menu" hidden></div>
 <div id="toast" class="toast" role="status" hidden></div>
 <dialog id="dialog"><div id="dialog-content"></div></dialog>
-<input id="file-input" type="file" accept=".gridline,.json,.csv,.tsv,.xlsx" hidden>
+<input id="file-input" type="file" accept=".spreadsheet,.gridline,.json,.csv,.tsv,.xlsx" hidden>
 <input id="fill-picker" type="color" value="#e2efda" hidden><input id="text-picker" type="color" value="#176b4a" hidden>
 <div id="print-area" hidden></div>
-<noscript>Gridline needs JavaScript enabled to render and edit worksheets.</noscript>
+<noscript>Spreadsheets needs JavaScript enabled to render and edit worksheets.</noscript>
 <script type="module" src="src/app.js"></script>
 </body></html>

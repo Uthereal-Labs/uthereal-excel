@@ -455,7 +455,7 @@ class Workbook {
   emit(label, full = false) { this.revision++; for (const fn of this.listeners) fn({ label, full, revision: this.revision }); }
   toJSON() { return { format: 'gridline', version: 1, title: this.title, activeSheetId: this.activeSheetId, names: this.names, sheets: this.sheets.map(s => s.toJSON()) }; }
   static fromJSON(data) {
-    if (!data || data.format !== 'gridline' || data.version !== 1 || !Array.isArray(data.sheets) || !data.sheets.length || data.sheets.length > 256) throw new Error('Not a supported Gridline workbook.');
+    if (!data || data.format !== 'gridline' || data.version !== 1 || !Array.isArray(data.sheets) || !data.sheets.length || data.sheets.length > 256) throw new Error('Not a supported spreadsheet file.');
     const wb = new Workbook(); wb.title = String(data.title ?? 'Workbook').slice(0, 200); wb.names = data.names && typeof data.names === 'object' ? { ...data.names } : {};
     wb.sheets = data.sheets.map(d => {
       if (!Array.isArray(d.cells) || d.cells.length > 1000000) throw new Error('Workbook cell limit exceeded.');
@@ -953,7 +953,7 @@ function createSampleWorkbook() {
   transactions.freezeRows = 1; transactions.rowHeights.set(0, 34); transactions.colWidths.set(0, 120); transactions.colWidths.set(1, 125); transactions.colWidths.set(2, 150); transactions.colWidths.set(4, 150); transactions.colWidths.set(10, 140);
   for (let i = 0; i < 120; i++) {
     const r = i + 1, channel = channels[i % channels.length], units = 8 + (i * 17) % 83, price = [99, 149, 249, 499][i % 4], day = 46023 + (i * 3) % 89;
-    const values = [`ORD-${(2001 + i)}`, day, channel[0], channel[1], ['Gridline Team', 'Gridline Pro', 'Gridline Business', 'Gridline Enterprise'][i % 4], units, price, `=F${r + 1}*G${r + 1}`, `=H${r + 1}*Assumptions!$B$3`, `=(H${r + 1}-I${r + 1})/H${r + 1}`, channel[7]];
+    const values = [`ORD-${(2001 + i)}`, day, channel[0], channel[1], ['Spreadsheet Team', 'Spreadsheet Pro', 'Spreadsheet Business', 'Spreadsheet Enterprise'][i % 4], units, price, `=F${r + 1}*G${r + 1}`, `=H${r + 1}*Assumptions!$B$3`, `=(H${r + 1}-I${r + 1})/H${r + 1}`, channel[7]];
     values.forEach((v, c) => put(transactions, r, c, v, { fill: i % 2 ? '#f4f8f5' : '#ffffff', format: c === 1 ? 'date' : c >= 6 && c <= 8 ? 'currency' : c === 9 ? 'percent' : 'general', fontSize: 12 }));
   }
   transactions.filters = { range: { r1: 0, c1: 0, r2: 120, c2: 10 }, criteria: {} };
@@ -1216,12 +1216,12 @@ const mini = (action, image, title, content = '') => `<button class="mini-tool" 
 const group = (label, content, extra = '') => `<div class="ribbon-group ${extra}"><div class="group-content">${content}</div><div class="group-label">${label}</div></div>`;
 const STORAGE_KEY = 'gridline.workbook.v1';
 const COMMANDS = [
-  ['new','New workbook','file','Ctrl/⌘ N'],['open','Open workbook','open','Ctrl/⌘ O'],['save','Save Gridline workbook','save','Ctrl/⌘ S'],['export-xlsx','Export Excel workbook (.xlsx)','export',''],['export-csv','Export current sheet as CSV','export',''],
-  ['find','Find and replace','search','Ctrl/⌘ F'],['chart','Insert chart','chart',''],['functions','Insert function','function',''],['name-manager','Named ranges','name',''],['sort','Sort range','sort',''],['filter','Filter values','filter',''],['conditional','Conditional formatting','conditional',''],['format-table','Format as table','table',''],['freeze-top','Freeze top row','freeze',''],['freeze-first','Freeze first column','freeze',''],['freeze','Freeze at active cell','freeze',''],['unfreeze','Unfreeze panes','freeze',''],['toggle-gridlines','Toggle gridlines','grid',''],['show-formulas','Show formulas','function','Ctrl/⌘ `'],['add-note','Add a cell note','comment',''],['notes','View notes','comment',''],['insert-row','Insert row','insert',''],['insert-column','Insert column','insert',''],['delete-row','Delete row','delete',''],['delete-column','Delete column','delete',''],['add-sheet','Add worksheet','plus',''],['duplicate-sheet','Duplicate worksheet','copy',''],['theme','Toggle dark mode','moon',''],['recalculate','Recalculate workbook','refresh',''],['performance','Renderer diagnostics','grid',''],['print','Print worksheet','print','Ctrl/⌘ P'],['help','Keyboard shortcuts','info','F1']
+  ['new','New workbook','file','Ctrl/⌘ N'],['open','Open workbook','open','Ctrl/⌘ O'],['save','Save spreadsheet file','save','Ctrl/⌘ S'],['export-xlsx','Export Excel workbook (.xlsx)','export',''],['export-csv','Export current sheet as CSV','export',''],
+  ['find','Find and replace','search','Ctrl/⌘ F'],['chart','Insert chart','chart',''],['functions','Insert function','function',''],['name-manager','Named ranges','name',''],['sort','Sort range','sort',''],['filter','Filter values','filter',''],['conditional','Conditional formatting','conditional',''],['format-table','Format as table','table',''],['freeze-top','Freeze top row','freeze',''],['freeze-first','Freeze first column','freeze',''],['freeze','Freeze at active cell','freeze',''],['unfreeze','Unfreeze panes','freeze',''],['toggle-gridlines','Toggle gridlines','grid',''],['show-formulas','Show formulas','function','Ctrl/⌘ `'],['insert-row','Insert row','insert',''],['insert-column','Insert column','insert',''],['delete-row','Delete row','delete',''],['delete-column','Delete column','delete',''],['add-sheet','Add worksheet','plus',''],['duplicate-sheet','Duplicate worksheet','copy',''],['theme','Toggle dark mode','moon',''],['recalculate','Recalculate workbook','refresh',''],['performance','Renderer diagnostics','grid',''],['print','Print worksheet','print','Ctrl/⌘ P']
 ];
 class GridlineApp {
   constructor() {
-    this.active = { r: 12, c: 6 }; this.anchor = { ...this.active }; this.selection = normalizedRange(this.active); this.tab = 'Home'; this.autosave = true; this.clipboard = null; this.editing = false; this.barEditing = false; this.sheetViews = new Map(); this.chartRevision = -1; this.panelType = null;
+    this.active = { r: 12, c: 6 }; this.anchor = { ...this.active }; this.selection = normalizedRange(this.active); this.tab = 'Home'; this.tabsExpanded = false; this.autosave = true; this.clipboard = null; this.editing = false; this.barEditing = false; this.sheetViews = new Map(); this.chartRevision = -1; this.panelType = null;
     this.host = $('#grid-host'); this.editor = $('#cell-editor'); this.formulaInput = $('#formula-input'); this.dialog = $('#dialog'); this.drag = null; this.composing = false;
     let workbook; const params = new URLSearchParams(location.search);
     try { const saved = !params.has('fresh') && localStorage.getItem(STORAGE_KEY); if (saved) workbook = Workbook.fromJSON(JSON.parse(saved)); } catch (e) { console.warn('Gridline restore:', e); }
@@ -1235,20 +1235,19 @@ class GridlineApp {
   observeWorkbook() {
     this.unsubscribe?.(); this.unsubscribe = this.workbook.onChange(() => {
       this.renderer.workbook = this.workbook; this.renderer.syncLayout(); this.updateUI(); this.renderTabs(); this.renderCharts();
-      if (this.panelType === 'notes') this.showNotes();
       $('#save-status').textContent = this.autosave ? 'Saving locally…' : 'Autosave is off';
       clearTimeout(this.saveTimer); if (this.autosave) this.saveTimer = setTimeout(() => this.persist(), 650);
     });
   }
   persist() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.workbook.toJSON())); $('#save-status').textContent = 'Saved on this device'; return true; }
-    catch { $('#save-status').textContent = 'Local storage full — export to save'; this.toast('Local storage is unavailable or full. Export a .gridline file to save your workbook.', true); return false; }
+    catch { $('#save-status').textContent = 'Local storage full — export to save'; this.toast('Local storage is unavailable or full. Export a .spreadsheet file to save your workbook.', true); return false; }
   }
   setWorkbook(workbook) {
     this.commitEdit(false); this.workbook = workbook; this.renderer.workbook = workbook; this.renderer.scrollX = this.renderer.scrollY = 0; this.sheetViews.clear(); this.clipboard = null; this.renderer.copyRange = null; this.observeWorkbook(); this.renderer.syncLayout(); this.select(normalizedRange({ r: 0, c: 0 }), { r: 0, c: 0 }, false); this.closePanel(); this.renderTabs(); this.renderCharts(); this.updateUI(); this.persist(); this.host.focus();
   }
   updateUI() {
-    $('#workbook-title').value = this.workbook.title; document.title = `${this.workbook.title} — Gridline`;
+    $('#workbook-title').value = this.workbook.title; document.title = `${this.workbook.title} — Spreadsheets`;
     $('#name-box').value = rangeAddress(this.selection);
     if (!this.editing && !this.barEditing) this.formulaInput.value = this.sheet.raw(this.active.r, this.active.c);
     this.renderer.selection = this.selection; this.renderer.active = this.active;
@@ -1278,7 +1277,7 @@ class GridlineApp {
   goto(r, c, extend = false) { r = Math.max(0, Math.min(MAX_ROWS - 1, r)); c = Math.max(0, Math.min(MAX_COLS - 1, c)); const p = { r, c }; if (!extend) this.anchor = p; this.select(extend ? normalizedRange(this.anchor, p) : normalizedRange(p), p, true); }
   errorBoundary(fn) { try { const value = fn(); if (value instanceof Promise) value.catch(e => this.toast(e.message, true)); return value; } catch (e) { this.toast(e.message, true); console.error(e); } }
   toast(message, error = false) { const t = $('#toast'); t.textContent = message; t.hidden = false; t.classList.toggle('error', error); clearTimeout(this.toastTimer); this.toastTimer = setTimeout(() => t.hidden = true, error ? 6500 : 3500); }
-  editable() { if (this.sheet.protected) { this.toast('This sheet is read-only. Turn off sheet protection from Review to edit.', true); return false; } return true; }
+  editable() { if (this.sheet.protected) { this.toast('This sheet is read-only. Enable editing from View to edit.', true); return false; } return true; }
   bindEvents() {
     document.addEventListener('click', e => {
       const tab = e.target.closest('[data-tab]'); if (tab) { this.tab = tab.dataset.tab; this.renderRibbon(); return; }
@@ -1444,7 +1443,6 @@ class GridlineApp {
       e.preventDefault();
       const command = { z:e.shiftKey ? 'redo' : 'undo', y:'redo', f:'find', h:'find', b:'bold', i:'italic', u:'underline', a:'select-all', d:'fill-down', r:'fill-right', '`':'show-formulas', n:'new' }[key]; this.errorBoundary(() => this.run(command)); return;
     }
-    if (e.key === 'F1') { e.preventDefault(); this.run('help'); return; }
     if (e.key === 'F2') { e.preventDefault(); this.startEdit(); return; }
     if (e.altKey && e.key === '=') { e.preventDefault(); this.run('autosum'); return; }
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab','Enter','Home','End','PageUp','PageDown'].includes(e.key)) {
@@ -1471,6 +1469,7 @@ class GridlineApp {
   }
   renderRibbon() {
     $$('[data-tab]').forEach(b => b.classList.toggle('selected', b.dataset.tab === this.tab));
+    $('.more-tabs-button').classList.toggle('selected', !this.tabsExpanded && !['Home', 'Insert'].includes(this.tab));
     const stack = (...items) => `<div class="tool-stack">${items.join('')}</div>`;
     let html = '';
     if (this.tab === 'Home') {
@@ -1482,18 +1481,16 @@ class GridlineApp {
       html += group('Cells', tool('insert-menu','Insert','insert',true,true) + tool('delete-menu','Delete','delete',true,true));
       html += group('Editing', stack(tool('autosum','AutoSum','sum'),tool('clear-menu','Clear','clear')) + tool('sort-filter','Sort &<br>filter','sort',true,true) + tool('find','Find &<br>select','search',true,true));
     } else if (this.tab === 'Insert') {
-      html = group('Tables',tool('format-table','Table','table',true)) + group('Charts',tool('chart','Column chart','chart',true)+tool('chart-line','Line chart','line',true)+tool('chart-bar','Bar chart','sort',true)+tool('chart-donut','Doughnut chart','donut',true)) + group('Text & references',tool('add-note','Cell note','comment',true)+tool('name-manager','Named range','name',true)) + group('Worksheets',tool('add-sheet','New sheet','plus',true)+tool('duplicate-sheet','Duplicate sheet','copy',true));
+      html = group('Tables',tool('format-table','Table','table',true)) + group('Charts',tool('chart','Column chart','chart',true)+tool('chart-line','Line chart','line',true)+tool('chart-bar','Bar chart','sort',true)+tool('chart-donut','Doughnut chart','donut',true)) + group('Named ranges',tool('name-manager','Named range','name',true)) + group('Worksheets',tool('add-sheet','New sheet','plus',true)+tool('duplicate-sheet','Duplicate sheet','copy',true));
     } else if (this.tab === 'Page Layout') {
       html = group('Page setup',tool('print','Print worksheet','print',true)+tool('print-selection','Print selection','grid',true)) + group('Sheet options',tool('toggle-gridlines','Gridlines','grid',true)+tool('auto-fit','Auto-fit columns','table',true)+tool('wrap','Wrap text','wrap',true)) + group('Workbook appearance',tool('theme','Light / dark','moon',true)+tool('zoom-reset','Actual size','search',true));
     } else if (this.tab === 'Formulas') {
       html = group('Function library',tool('functions','Insert function','function',true)+tool('autosum','AutoSum','sum',true)) + group('Defined names',tool('name-manager','Name manager','name',true)) + group('Formula auditing',tool('show-formulas','Show formulas','function',true)+tool('inspect-formula','Inspect cell','search',true)) + group('Calculation',tool('recalculate','Calculate now','refresh',true));
     } else if (this.tab === 'Data') {
       html = group('Get data',tool('open','From CSV / XLSX','open',true)+tool('export-csv','Export CSV','export',true)) + group('Sort & filter',tool('sort-asc','Sort A to Z','sort',true)+tool('sort-desc','Sort Z to A','sort',true)+tool('sort','Custom sort','table',true)+tool('filter','Filter','filter',true)+tool('clear-filter','Clear filters','clear',true)) + group('Data tools',tool('remove-duplicates','Remove duplicates','table',true)+tool('recalculate','Recalculate','refresh',true));
-    } else if (this.tab === 'Review') {
-      html = group('Notes',tool('add-note','New note','comment',true)+tool('notes','Show all notes','comment',true)) + group('Protection',tool('protect',this.sheet.protected ? 'Enable editing' : 'Read-only sheet','lock',true)) + group('Workbook',tool('inspect-formula','Inspect active cell','search',true)+tool('about','About Gridline','info',true));
     } else if (this.tab === 'View') {
-      html = group('Show',tool('toggle-gridlines','Gridlines','grid',true)+tool('show-formulas','Formulas','function',true)+tool('theme','Light / dark','moon',true)) + group('Zoom',tool('zoom-in','Zoom in','search',true)+tool('zoom-out','Zoom out','search',true)+tool('zoom-reset','100%','grid',true)) + group('Window',tool('freeze','Freeze panes','freeze',true)+tool('freeze-top','Freeze top row','table',true)+tool('freeze-first','Freeze first column','table',true)+tool('unfreeze','Unfreeze panes','clear',true)) + group('Engine',tool('performance','Performance','grid',true));
-    } else html = group('Get started',tool('help','Keyboard shortcuts','info',true)+tool('commands','Find a command','search',true)+tool('sample','Load demo workbook','table',true)) + group('Gridline',tool('about','About & limitations','info',true)+tool('performance','Engine diagnostics','grid',true));
+      html = group('Show',tool('toggle-gridlines','Gridlines','grid',true)+tool('show-formulas','Formulas','function',true)+tool('theme','Light / dark','moon',true)) + group('Zoom',tool('zoom-in','Zoom in','search',true)+tool('zoom-out','Zoom out','search',true)+tool('zoom-reset','100%','grid',true)) + group('Window',tool('freeze','Freeze panes','freeze',true)+tool('freeze-top','Freeze top row','table',true)+tool('freeze-first','Freeze first column','table',true)+tool('unfreeze','Unfreeze panes','clear',true)) + group('Sheet',tool('protect',this.sheet.protected ? 'Enable editing' : 'Read-only sheet','lock',true)) + group('Engine',tool('performance','Performance','grid',true));
+    }
     $('#ribbon').innerHTML = html;
     $('#font-family')?.addEventListener('change', e => this.errorBoundary(() => this.format({ fontFamily: e.target.value })));
     $('#font-size')?.addEventListener('change', e => this.errorBoundary(() => this.format({ fontSize: +e.target.value / .75 })));
@@ -1534,12 +1531,13 @@ class GridlineApp {
     if (action.startsWith('align-')) return this.format({ align: action.slice(6) });
     switch (action) {
       case 'file': return this.showFile();
+      case 'more-tabs': this.tabsExpanded = !this.tabsExpanded; element.setAttribute('aria-expanded', String(this.tabsExpanded)); element.setAttribute('aria-label', this.tabsExpanded ? 'Hide extra tabs' : 'Show more tabs'); $$('.ribbon-tabs .extra-tab').forEach(tab => tab.hidden = !this.tabsExpanded); this.renderRibbon(); return;
       case 'export': return this.showExport();
       case 'new': return this.confirm('Create a new workbook?', 'Export your current workbook first to keep a separate copy. The new workbook will replace the local autosave.', () => this.setWorkbook(new Workbook()), 'Create workbook');
       case 'sample': return this.confirm('Load the demo workbook?', 'This replaces the current local workbook with the illustrative revenue workbook.', () => { this.setWorkbook(createSampleWorkbook()); this.goto(12, 6); }, 'Load demo');
       case 'open': this.closeDialog(); $('#file-input').click(); return;
-      case 'save': this.persist(); downloadFile(this.fileName('.gridline'), JSON.stringify(this.workbook.toJSON(), null, 2), 'application/json'); this.toast('Gridline workbook exported with all app features.'); return;
-      case 'export-xlsx': downloadFile(this.fileName('.xlsx'), exportXLSX(this.workbook), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); this.closeDialog(); this.toast('XLSX exported. Charts, notes, and conditional rules remain in the .gridline format.'); return;
+      case 'save': this.persist(); downloadFile(this.fileName('.spreadsheet'), JSON.stringify(this.workbook.toJSON(), null, 2), 'application/json'); this.toast('Spreadsheet file exported.'); return;
+      case 'export-xlsx': downloadFile(this.fileName('.xlsx'), exportXLSX(this.workbook), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); this.closeDialog(); this.toast('XLSX exported. Charts and conditional rules remain in the .gridline format.'); return;
       case 'export-csv': downloadFile(this.sheet.name + '.csv', exportCSV(this.workbook), 'text/csv;charset=utf-8'); this.closeDialog(); this.toast('Current sheet exported as CSV values.'); return;
       case 'autosave': this.autosave = !this.autosave; $('#autosave-toggle').classList.toggle('on', this.autosave); if (this.autosave) this.persist(); else $('#save-status').textContent = 'Autosave is off'; return;
       case 'undo': this.workbook.undo(); return;
@@ -1582,9 +1580,6 @@ class GridlineApp {
       case 'clear-filter': this.workbook.mutate('Clear filters', () => { this.sheet.hiddenRows.clear(); if (this.sheet.filters) this.sheet.filters.criteria = {}; }); return;
       case 'remove-duplicates': return this.removeDuplicates();
       case 'find': return this.showFind();
-      case 'notes': return this.showNotes();
-      case 'add-note': return this.addNote();
-      case 'delete-note': if (this.editable()) this.workbook.setCell(this.sheet, +element.dataset.row, +element.dataset.col, { note: undefined }); return;
       case 'protect': this.workbook.mutate('Toggle read-only sheet', () => this.sheet.protected = !this.sheet.protected); this.renderRibbon(); this.toast(this.sheet.protected ? 'Sheet editing is disabled in this app. This is not encryption.' : 'Sheet editing enabled.'); return;
       case 'functions': return this.showFunctions();
       case 'commands': return this.showCommands();
@@ -1607,8 +1602,6 @@ class GridlineApp {
       case 'prev-sheet': case 'next-sheet': { const at = this.workbook.sheets.findIndex(s => s.id === this.sheet.id), next = this.workbook.sheets[at + (action === 'prev-sheet' ? -1 : 1)]; if (next) this.switchSheet(next.id); return; }
       case 'sheets': return this.showSheets();
       case 'performance': return this.showPerformance();
-      case 'help': return this.showHelp();
-      case 'about': return this.showAbout();
       case 'print': return this.printSheet(false);
       case 'print-selection': return this.printSheet(true);
       case 'cancel-edit': return this.cancelEdit();
@@ -1624,7 +1617,7 @@ class GridlineApp {
     if (file.size > 32 * 1024 * 1024) throw new Error('Files must be 32 MB or smaller.'); this.toast('Opening ' + file.name + '…');
     const title = file.name.replace(/\.[^.]+$/, ''); let workbook, warnings;
     if (/\.xlsx$/i.test(file.name)) { const result = await importXLSX(await file.arrayBuffer(), title); workbook = result.workbook; warnings = result.warnings; }
-    else if (/\.(gridline|json)$/i.test(file.name)) workbook = Workbook.fromJSON(JSON.parse(await file.text()));
+    else if (/\.(spreadsheet|gridline|json)$/i.test(file.name)) workbook = Workbook.fromJSON(JSON.parse(await file.text()));
     else workbook = workbookFromCSV(await file.text(), title);
     this.setWorkbook(workbook); this.toast(warnings?.[0] || `Opened ${file.name}.`);
   }
@@ -1640,7 +1633,7 @@ class GridlineApp {
   async copy(cut) {
     const text = this.clipboardPayload(cut);
     try { await navigator.clipboard.writeText(text); this.toast(cut ? 'Cut selection. Paste to move its cells.' : 'Selection copied.'); }
-    catch { this.toast('Selection copied inside Gridline. Use Paste, or Ctrl/⌘ C to copy to your system clipboard.'); }
+    catch { this.toast('Selection copied in this spreadsheet. Use Paste, or Ctrl/⌘ C for the system clipboard.'); }
   }
   async paste() { let text; try { text = await navigator.clipboard.readText(); } catch { text = this.clipboard?.text; } if (text === undefined) { this.toast('Use Ctrl/⌘ V to paste from your clipboard.'); this.host.focus(); return; } this.pasteText(text); }
   pasteText(text) {
@@ -1701,13 +1694,13 @@ class GridlineApp {
     menu.onclick = () => menu.hidden = true;
   }
   menuAt(element, entries) { const box = element?.getBoundingClientRect(); this.contextMenu(box?.left ?? 200, box?.bottom ?? 200, entries); }
-  cellContextMenu(x, y) { this.contextMenu(x,y,[['cut','Cut','Ctrl/⌘ X'],['copy','Copy','Ctrl/⌘ C'],['paste','Paste','Ctrl/⌘ V'],null,['insert-row','Insert row above'],['insert-column','Insert column left'],['delete-row','Delete row'],['delete-column','Delete column'],null,['clear','Clear contents','Delete'],['auto-fit','Auto-fit columns'],['add-note','Add / edit note'],['inspect-formula','Inspect cell'],null,['filter','Filter values…']]); }
+  cellContextMenu(x, y) { this.contextMenu(x,y,[['cut','Cut','Ctrl/⌘ X'],['copy','Copy','Ctrl/⌘ C'],['paste','Paste','Ctrl/⌘ V'],null,['insert-row','Insert row above'],['insert-column','Insert column left'],['delete-row','Delete row'],['delete-column','Delete column'],null,['clear','Clear contents','Delete'],['auto-fit','Auto-fit columns'],['inspect-formula','Inspect cell'],null,['filter','Filter values…']]); }
   showFile() {
     const card=(action,title,desc,image)=>`<button class="file-card" data-action="${action}">${icon(image)}<span><strong>${title}</strong><small>${desc}</small></span></button>`;
-    this.openDialog('Your workspace', `<div class="file-hero"><div class="eyebrow">GRIDLINE / LOCAL FIRST</div><h3>Big ideas.<br>Beautifully organized.</h3><p>A spreadsheet that gives your numbers room to make sense.</p></div><div class="dialog-grid">${card('new','Blank workbook','Start with a clean sheet.','file')}${card('open','Open a workbook','Gridline, XLSX, CSV or TSV.','open')}${card('save','Save a copy','Preserve every Gridline feature.','save')}${card('export','Export your work','Excel workbook or CSV values.','export')}${card('sample','Explore the demo','A fictional revenue operations model.','table')}${card('help','Make yourself at home','Shortcuts, formulas and editing tips.','info')}</div><p class="help-text" style="margin:20px 0 0">No account. No uploads. Workbook data is processed in your browser. Local autosave is specific to this browser and site.</p>`, 620);
+    this.openDialog('Your workspace', `<div class="file-hero"><div class="eyebrow">SPREADSHEETS / LOCAL FIRST</div><h3>Big ideas.<br>Beautifully organized.</h3><p>A spreadsheet that gives your numbers room to make sense.</p></div><div class="dialog-grid">${card('new','Blank workbook','Start with a clean sheet.','file')}${card('open','Open a workbook','Spreadsheet file, XLSX, CSV or TSV.','open')}${card('save','Save a copy','Save an editable spreadsheet file.','save')}${card('export','Export your work','Excel workbook or CSV values.','export')}${card('sample','Explore the demo','A fictional revenue operations model.','table')}</div><p class="help-text" style="margin:20px 0 0">No account. No uploads. Workbook data is processed in your browser. Local autosave is specific to this browser and site.</p>`, 620);
   }
   showExport() {
-    this.openDialog('Export workbook', `<div class="dialog-grid"><button class="file-card" data-action="save">${icon('save')}<span><strong>Gridline workbook</strong><small>.gridline · Full document fidelity, notes, chart definitions and rules.</small></span></button><button class="file-card" data-action="export-xlsx">${icon('table')}<span><strong>Excel workbook</strong><small>.xlsx · Cells, formulas, basic styles, merges, dimensions and frozen panes.</small></span></button><button class="file-card" data-action="export-csv">${icon('file')}<span><strong>CSV values</strong><small>.csv · Current sheet, values only. No formatting or formulas.</small></span></button><button class="file-card" data-action="print">${icon('print')}<span><strong>Print / Save as PDF</strong><small>Use your browser’s print dialog. Tabular sheet output.</small></span></button></div><p class="help-text">XLSX is a deliberately limited interoperability path, not a lossless Excel round-trip. Use .gridline to retain all features of this app. No files are uploaded.</p>`, 640);
+    this.openDialog('Export workbook', `<div class="dialog-grid"><button class="file-card" data-action="save">${icon('save')}<span><strong>Spreadsheet file</strong><small>.spreadsheet · Editable cells, formulas, charts and rules.</small></span></button><button class="file-card" data-action="export-xlsx">${icon('table')}<span><strong>Excel workbook</strong><small>.xlsx · Cells, formulas, basic styles, merges, dimensions and frozen panes.</small></span></button><button class="file-card" data-action="export-csv">${icon('file')}<span><strong>CSV values</strong><small>.csv · Current sheet, values only. No formatting or formulas.</small></span></button><button class="file-card" data-action="print">${icon('print')}<span><strong>Print / Save as PDF</strong><small>Use your browser’s print dialog. Tabular sheet output.</small></span></button></div><p class="help-text">XLSX is a deliberately limited interoperability path, not a lossless Excel round-trip. Use the spreadsheet file to retain all supported features. No files are uploaded.</p>`, 640);
   }
   showConditional() {
     if (!this.editable()) return;
@@ -1768,16 +1761,6 @@ class GridlineApp {
     $('#find-query').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#find-next').click();}};
     $('#replace-all').onclick=()=>this.errorBoundary(()=>{if(!this.editable())return;const query=$('#find-query').value,replace=$('#replace-query').value;if(!query)return;let count=0;this.workbook.transaction('Replace all',()=>{for(const [key,cell]of this.sheet.cells){if(!cell.raw.includes(query))continue;const [r,c]=key.split(',').map(Number);this.workbook.setRaw(this.sheet,r,c,cell.raw.split(query).join(replace));count++;}});this.toast(`Replaced exact, case-sensitive matches in ${count} cells.`);search();});$('#find-query').focus();
   }
-  showNotes() {
-    const notes=[];for(const [key,cell]of this.sheet.cells)if(cell.note){const[r,c]=key.split(',').map(Number);notes.push({r,c,text:cell.note});}
-    this.openPanel('notes','Worksheet notes',`<button class="primary-btn" data-action="add-note">${icon('plus')} Add note at ${address(this.active.r,this.active.c)}</button><p class="help-text">Local cell annotations. Notes are stored in .gridline workbooks, not shared with other people.</p>${notes.map(note=>`<div class="note-card"><div class="note-card-header"><button data-note-location="${address(note.r,note.c)}">${address(note.r,note.c)}</button><button data-action="delete-note" data-row="${note.r}" data-col="${note.c}" title="Delete note">×</button></div><p>${escapeHTML(note.text)}</p></div>`).join('')||'<div class="empty-panel">A little context goes a long way.<br>Add a note to any cell.</div>'}`);
-    $$('[data-note-location]').forEach(b=>b.onclick=()=>{const p=parseAddress(b.dataset.noteLocation);this.goto(p.r,p.c);});
-  }
-  addNote() {
-    if(!this.editable())return;const {r,c}=this.active;
-    this.openDialog(`Note at ${address(r,c)}`,`<textarea id="note-text" class="dialog-input" style="height:155px;resize:vertical" maxlength="10000" autofocus placeholder="Add context, a reminder, or a question…">${escapeHTML(this.sheet.get(r,c)?.note||'')}</textarea><p class="help-text">This note is local to your workbook.</p><div class="dialog-actions"><button class="secondary-btn" data-action="close-dialog">Cancel</button><button class="primary-btn" id="note-save">Save note</button></div>`);
-    $('#note-save').onclick=()=>{this.workbook.setCell(this.sheet,r,c,{note:$('#note-text').value.trim()||undefined});this.closeDialog();this.showNotes();};
-  }
   showCellInspector() {
     const cell=this.sheet.get(this.active.r,this.active.c),value=this.workbook.value(this.sheet,this.active.r,this.active.c),id=this.workbook.engine.id(this.sheet,this.active.r,this.active.c),deps=[...(this.workbook.engine.dependencies.get(id)||[])];
     this.openPanel('inspect','Cell inspector',`<div class="eyebrow">${escapeHTML(this.sheet.name)} / ${address(this.active.r,this.active.c)}</div><label class="field-label">Original input</label><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">${escapeHTML(cell?.raw||'(empty)')}</pre><label class="field-label">Calculated value</label><pre style="white-space:pre-wrap">${escapeHTML(value instanceof FormulaError?value.code:value??'(blank)')}</pre>${value instanceof FormulaError?`<p class="help-text">${escapeHTML(value.message)}</p>`:''}<div class="metric-line"><span>Value type</span><strong>${value instanceof FormulaError?'error':value===null?'blank':typeof value}</strong></div><div class="metric-line"><span>Direct dependencies</span><strong>${deps.length}</strong></div><label class="field-label">References read during evaluation</label><div class="help-text">${deps.slice(0,100).map(d=>{const [sid,key]=d.split('!'),[r,c]=key.split(',').map(Number);return escapeHTML((this.workbook.sheets.find(s=>s.id===sid)?.name||sid)+'!'+address(r,c));}).join('<br>')||'No cell dependencies.'}</div>`);
@@ -1791,13 +1774,6 @@ class GridlineApp {
     const metrics=$('#perf-metrics');if(!metrics)return;const formulaCount=[...this.sheet.cells.values()].filter(c=>c.raw.startsWith('=')).length;
     const lines=[['Backend',this.renderer.backend],['Logical sheet','1,048,576 × 16,384'],['Stored cells',this.sheet.cells.size.toLocaleString()],['Formula cells',formulaCount.toLocaleString()],['Visible cells',this.renderer.visibleCellCount],['Last frame CPU',this.renderer.lastFrameMs.toFixed(2)+' ms'],['Instanced quads',this.renderer.backend==='webgpu'?this.renderer.instanceCount.toLocaleString():'—'],['Glyphs cached',this.renderer.atlas.map.size],['Cached formula results',this.workbook.engine.cache.size],['Cell evaluations',this.workbook.engine.evaluations.toLocaleString()]];
     metrics.innerHTML=lines.map(([label,value])=>`<div class="metric-line"><span>${label}</span><strong>${escapeHTML(value)}</strong></div>`).join('');
-  }
-  showHelp() {
-    const shortcuts=[['Navigate / extend selection','Arrow keys / Shift + arrows'],['Jump to data edge','Ctrl/⌘ + arrow'],['First cell / last used cell','Ctrl/⌘ + Home / End'],['Edit active cell','F2 or start typing'],['Apply edit / cancel','Enter / Escape'],['Move across cells','Tab / Shift + Tab'],['Insert line break while editing','Alt + Enter'],['Cycle absolute formula reference','F4 while editing'],['Copy / cut / paste','Ctrl/⌘ + C / X / V'],['Undo / redo','Ctrl/⌘ + Z / Shift + Z'],['Fill down / right','Ctrl/⌘ + D / R'],['Bold / italic / underline','Ctrl/⌘ + B / I / U'],['Find and replace','Ctrl/⌘ + F'],['AutoSum','Alt + ='],['Command search','Ctrl/⌘ + K'],['Export full-fidelity workbook','Ctrl/⌘ + S'],['Open a workbook','Ctrl/⌘ + O'],['Print','Ctrl/⌘ + P'],['Show formula input','Ctrl/⌘ + `']];
-    this.openDialog('Make yourself at home',`<p class="help-text">Double-click a cell to edit. Drag to select a range. Drag the small green square at the selection’s lower-right corner to fill. Two numeric seed cells create a sequence. Resize columns and rows by dragging header boundaries; double-click a column boundary to auto-fit.</p><table class="help-table">${shortcuts.map(([label,key])=>`<tr><td>${label}</td><td><kbd>${key}</kbd></td></tr>`).join('')}</table><h3>A few formulas to try</h3><p class="help-text"><code>=SUM(D12:F12)</code><br><code>=IF(G12&gt;=H12,"Above target","Needs focus")</code><br><code>=XLOOKUP("Enterprise",B12:B19,G12:G19)</code><br><code>='Sales data'!H2 * Assumptions!$B$3</code></p>`,680);
-  }
-  showAbout() {
-    this.openDialog('Gridline',`<div class="file-hero"><div class="eyebrow">VERSION 0.1 / ENGINEERING PREVIEW</div><h3>A clearer way to work.</h3><p>A working, local-first spreadsheet built with plain JavaScript, HTML and CSS. No application framework, cloud backend, runtime dependencies, or evaluation of formula strings as JavaScript.</p></div><h3>Under the hood</h3><p class="help-text">Sparse cell storage, ${FUNCTIONS.size} registered function names, a Pratt-parser formula AST, dependency invalidation, transactional cell edits, undo/redo, viewport culling, frozen panes, and an instanced WebGPU renderer with a cached glyph-mask atlas. Native text inputs handle editing.</p><h3>Boundaries of this build</h3><p class="help-text">This is not feature-equivalent to Microsoft Excel. VBA, Power Query, pivot tables, dynamic-array spills, collaboration, advanced print layout, rich cell text, full international text shaping and complete Excel formula/file compatibility are not implemented. The grid has a 200,000-cell range-operation limit and a 256-cell calculation-stack limit. Large snapshots and calculation run on the main thread. Charts use SVG overlays. Basic XLSX exchange is not lossless; use .gridline for full app fidelity.</p><p class="help-text">Sheet read-only mode is a UI editing guard, not security or encryption. Cut/paste moves values and formulas but does not retarget references from other cells. Structural row/column edits clear charts and conditional rules on that sheet to avoid stale range metadata.</p><p class="help-text">Gridline is an independent implementation with an Excel-inspired interface. It is not affiliated with Microsoft. All demo business data is fictional.</p>`,670);
   }
   showChart(type='column') {
     if(!this.editable())return;const q=this.dataRange();
@@ -1844,7 +1820,7 @@ class GridlineApp {
   printSheet(selected=false) {
     this.closeDialog();const q=selected?this.selection:this.sheet.usedRange();if((q.r2-q.r1+1)*(q.c2-q.c1+1)>10000)throw new Error('Print supports at most 10,000 cells. Select a smaller range.');
     let rows='';for(let r=q.r1;r<=q.r2;r++){if(this.sheet.hiddenRows.has(r))continue;let cells='';for(let c=q.c1;c<=q.c2;c++){const merge=this.sheet.mergeAt(r,c);if(merge&&(r!==merge.r1||c!==merge.c1))continue;const style=this.sheet.get(r,c)?.style||{};const safeColor=color=>/^#[0-9a-f]{6}$/i.test(color)?color:'inherit';cells+=`<td${merge?` rowspan="${Math.min(merge.r2,q.r2)-r+1}" colspan="${Math.min(merge.c2,q.c2)-c+1}"`:''} style="background:${safeColor(style.fill)};color:${safeColor(style.color)};font-weight:${style.bold?'bold':'normal'};text-align:${['left','center','right'].includes(style.align)?style.align:typeof this.workbook.value(this.sheet,r,c)==='number'?'right':'left'}">${escapeHTML(this.workbook.display(this.sheet,r,c))}</td>`;}rows+='<tr>'+cells+'</tr>';}
-    $('#print-area').innerHTML=`<h1>${escapeHTML(this.workbook.title)}</h1><p class="print-meta">${escapeHTML(this.sheet.name)} · ${rangeAddress(q)} · Printed from Gridline</p><table>${rows}</table>`;window.print();
+    $('#print-area').innerHTML=`<h1>${escapeHTML(this.workbook.title)}</h1><p class="print-meta">${escapeHTML(this.sheet.name)} · ${rangeAddress(q)} · Printed from Spreadsheets</p><table>${rows}</table>`;window.print();
   }
 }
 const app = new GridlineApp();

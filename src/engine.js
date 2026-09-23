@@ -449,7 +449,7 @@ export class Workbook {
   emit(label, full = false) { this.revision++; for (const fn of this.listeners) fn({ label, full, revision: this.revision }); }
   toJSON() { return { format: 'gridline', version: 1, title: this.title, activeSheetId: this.activeSheetId, names: this.names, sheets: this.sheets.map(s => s.toJSON()) }; }
   static fromJSON(data) {
-    if (!data || data.format !== 'gridline' || data.version !== 1 || !Array.isArray(data.sheets) || !data.sheets.length || data.sheets.length > 256) throw new Error('Not a supported Gridline workbook.');
+    if (!data || data.format !== 'gridline' || data.version !== 1 || !Array.isArray(data.sheets) || !data.sheets.length || data.sheets.length > 256) throw new Error('Not a supported spreadsheet file.');
     const wb = new Workbook(); wb.title = String(data.title ?? 'Workbook').slice(0, 200); wb.names = data.names && typeof data.names === 'object' ? { ...data.names } : {};
     wb.sheets = data.sheets.map(d => {
       if (!Array.isArray(d.cells) || d.cells.length > 1000000) throw new Error('Workbook cell limit exceeded.');
