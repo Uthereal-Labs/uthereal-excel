@@ -1,3 +1,4 @@
+import { SUPPORTED_CURRENCIES, normalizeCurrency } from './currency.js';
 import { Workbook, MAX_ROWS, MAX_COLS, MAX_RANGE_CELLS, FUNCTIONS, FormulaError, address, parseAddress, parseRange, normalizedRange, rangeAddress, cellsIn, keyOf, shiftFormula, formatValue, colName } from './engine.js';
 import { GridRenderer } from './renderer.js';
 import { createSampleWorkbook } from './sample.js';
@@ -71,6 +72,7 @@ class GridlineApp {
     const style = this.sheet.get(this.active.r, this.active.c)?.style || {};
     for (const prop of ['bold', 'italic', 'underline', 'wrap']) $$(`[data-action="${prop}"]`).forEach(b => b.classList.toggle('active', !!style[prop]));
     for (const align of ['left', 'center', 'right']) $$(`[data-action="align-${align}"]`).forEach(b => b.classList.toggle('active', style.align === align));
+    const currency = $('#currency-code'); if (currency) currency.value = style.currency ?? 'USD';
     const format = $('#number-format'); if (format) format.value = ['general','number','currency','percent','date','integer'].includes(style.format) ? style.format : 'general';
     const size = $('#font-size'); if (size) size.value = Math.round((style.fontSize || 13) * 0.75);
     $$('[data-action="undo"]').forEach(b => b.disabled = !this.workbook.undoStack.length); $$('[data-action="redo"]').forEach(b => b.disabled = !this.workbook.redoStack.length);
@@ -293,7 +295,7 @@ class GridlineApp {
       html += group('Clipboard', tool('paste','Paste','paste',true,true) + stack(tool('cut','Cut','cut'),tool('copy','Copy','copy')) + stack(tool('format-painter','Format painter','paint')));
       html += group('Font', `<div class="font-tools"><div class="ribbon-row"><select id="font-family" class="font-select" aria-label="Font family"><option>Aptos</option><option>Arial</option><option>Georgia</option><option>Verdana</option><option>Courier New</option></select><select id="font-size" class="font-size" aria-label="Font size">${[8,9,10,11,12,14,16,18,20,24,28,32,36,48].map(s => `<option${s === 10 ? ' selected' : ''}>${s}</option>`).join('')}</select>${mini('font-larger','plus','Increase font size','A⁺')}${mini('font-smaller','plus','Decrease font size','A⁻')}</div><div class="ribbon-row">${mini('bold','','Bold (Ctrl/⌘ B)','<span class="text-bold">B</span>')}${mini('italic','','Italic (Ctrl/⌘ I)','<span class="text-italic">I</span>')}${mini('underline','','Underline (Ctrl/⌘ U)','<span class="text-underline">U</span>')}<span class="ribbon-sep"></span>${mini('borders','border','Toggle cell borders')}<span class="ribbon-sep"></span><button class="mini-tool fill-color-tool" data-action="fill-color" title="Fill color" aria-label="Fill color">${icon('fill')}</button><button class="mini-tool font-color-tool" data-action="text-color" title="Font color" aria-label="Font color">A</button></div></div>`);
       html += group('Alignment', `<div class="font-tools"><div class="ribbon-row">${mini('align-left','alignLeft','Align left')}${mini('align-center','alignCenter','Center')}${mini('align-right','alignRight','Align right')}${tool('wrap','Wrap text','wrap')}</div><div class="ribbon-row">${tool('merge','Merge & center','merge')}</div></div>`);
-      html += group('Number', `<div class="font-tools"><div class="ribbon-row"><select id="number-format" class="number-format" aria-label="Number format"><option value="general">General</option><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percentage</option><option value="date">Short date</option><option value="integer">Integer</option></select></div><div class="ribbon-row">${mini('currency','','Currency','$')}${mini('percent','percent','Percentage')}${mini('number','','Number with separator',',')}<span class="ribbon-sep"></span>${mini('decimal-less','','Decrease decimals','.0←')}${mini('decimal-more','','Increase decimals','→.00')}</div></div>`);
+      html += group('Number', `<div class="font-tools"><div class="ribbon-row"><select id="number-format" class="number-format" aria-label="Number format"><option value="general">General</option><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percentage</option><option value="date">Short date</option><option value="integer">Integer</option></select><select id="currency-code" aria-label="Currency">${SUPPORTED_CURRENCIES.map(code => `<option value="${code}">${code}</option>`).join('')}</select></div><div class="ribbon-row">${mini('currency','','Currency','$')}${mini('percent','percent','Percentage')}${mini('number','','Number with separator',',')}<span class="ribbon-sep"></span>${mini('decimal-less','','Decrease decimals','.0←')}${mini('decimal-more','','Increase decimals','→.00')}</div></div>`);
       html += group('Styles', tool('conditional','Conditional<br>formatting','conditional',true,true) + tool('format-table','Format as<br>table','table',true,true) + `<div class="style-gallery"><button class="style-chip" data-action="style-normal">Normal</button><button class="style-chip good" data-action="style-good">Good</button><button class="style-chip heading" data-action="style-heading">Heading</button><button class="style-chip warning" data-action="style-warning">Warning</button></div>`, 'styles-group');
       html += group('Cells', tool('insert-menu','Insert','insert',true,true) + tool('delete-menu','Delete','delete',true,true));
       html += group('Editing', stack(tool('autosum','AutoSum','sum'),tool('clear-menu','Clear','clear')) + tool('sort-filter','Sort &<br>filter','sort',true,true) + tool('find','Find &<br>select','search',true,true));
@@ -311,7 +313,8 @@ class GridlineApp {
     $('#ribbon').innerHTML = html;
     $('#font-family')?.addEventListener('change', e => this.errorBoundary(() => this.format({ fontFamily: e.target.value })));
     $('#font-size')?.addEventListener('change', e => this.errorBoundary(() => this.format({ fontSize: +e.target.value / .75 })));
-    $('#number-format')?.addEventListener('change', e => this.errorBoundary(() => this.format({ format: e.target.value, decimals: undefined })));
+    $('#currency-code')?.addEventListener('change', e => this.errorBoundary(() => this.format({ format: 'currency', currency: normalizeCurrency(e.target.value) })));
+    $('#number-format')?.addEventListener('change', e => this.errorBoundary(() => this.format({ format: e.target.value, ...(e.target.value === 'currency' ? { currency: $('#currency-code').value } : {}), decimals: undefined })));
     this.updateUI();
   }
   renderTabs() {
@@ -366,7 +369,8 @@ class GridlineApp {
       case 'fill-color': $('#fill-picker').click(); return;
       case 'text-color': $('#text-picker').click(); return;
       case 'borders': return this.format({ border: !style.border });
-      case 'currency': case 'percent': case 'number': return this.format({ format: action, decimals: undefined });
+      case 'currency': return this.format({ format: action, currency: style.currency ?? 'USD', decimals: undefined });
+      case 'percent': case 'number': return this.format({ format: action, decimals: undefined });
       case 'decimal-less': return this.format({ decimals: Math.max(0, (style.decimals ?? 2) - 1) });
       case 'decimal-more': return this.format({ decimals: Math.min(10, (style.decimals ?? 0) + 1) });
       case 'font-larger': return this.format({ fontSize: Math.min(72, (style.fontSize || 13) + 2) });
@@ -642,6 +646,8 @@ class GridlineApp {
 }
 const app = new GridlineApp();
 // Intentional diagnostics/embedding API. The model remains independent of the view.
+app.supportedCurrencies = SUPPORTED_CURRENCIES;
+app.normalizeCurrency = normalizeCurrency;
 window.gridline = app;
 
 window.Gridline = Object.freeze({ version: '0.1.0', Workbook, GridRenderer, exportXLSX, importXLSX, parseDelimited, serializeDelimited, exportCSV, createSampleWorkbook });

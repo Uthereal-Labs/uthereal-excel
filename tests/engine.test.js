@@ -74,3 +74,52 @@ test('non-finite literal numbers produce an explicit error',()=>{const w=make(),
 test('renaming a worksheet retargets defined names',()=>{const w=createSampleWorkbook(),s=w.sheetByName('Assumptions');w.renameSheet(s,'Model assumptions');assert.equal(w.names.COST_RATIO,"'Model assumptions'!$B$3");const t=w.sheetByName('Sales data');w.setRaw(t,0,20,'=COST_RATIO');assert.equal(w.value(t,0,20),.58);});
 test('JSON metadata cannot replace sheet methods',()=>{const d=make().toJSON();d.sheets[0].get='unsafe';d.sheets[0].toJSON='unsafe';const w=Workbook.fromJSON(d);assert.equal(typeof w.activeSheet.get,'function');assert.equal(typeof w.activeSheet.toJSON,'function');});
 test('function registry exposes the documented 83 names',()=>assert.equal(FUNCTIONS.size,83));
+
+
+test('explicit currency styles preserve units, decimals, formulas and partial edits', () => {
+  const wb = make(), sheet = wb.activeSheet;
+  for (const [c, currency] of ['EUR', 'USD', 'GBP', 'CHF', 'JPY'].entries()) {
+    wb.setCell(sheet, 0, c, { raw: '=1234.5', style: { format: 'currency', currency, decimals: 2 } });
+    assert.equal(wb.display(sheet, 0, c), new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(1234.5));
+    wb.setCell(sheet, 0, c, { style: { bold: true } });
+    assert.equal(sheet.get(0, c).style.currency, currency);
+    wb.setCell(sheet, 0, c, { style: { format: 'number' } });
+    assert.equal(wb.display(sheet, 0, c), '1,234.50');
+    assert.equal(sheet.raw(0, c), '=1234.5');
+    wb.setCell(sheet, 0, c, { style: { format: 'currency', decimals: 0 } });
+  }
+  const restored = Workbook.fromJSON(JSON.parse(JSON.stringify(wb.toJSON())));
+  assert.deepEqual(restored.toJSON(), wb.toJSON());
+  assert.equal(formatValue(1, { format: 'currency' }), '$1');
+  assert.equal(formatValue(1, { format: '€0.00', currency: 'CHF' }), '€1');
+});
+test('invalid currency input is rejected before cell changes or persisted restoration', () => {
+  const wb = make(), sheet = wb.activeSheet;
+  wb.setCell(sheet, 0, 0, { raw: '=1+2', style: { format: 'currency', currency: 'EUR' } });
+  const before = JSON.stringify(wb.toJSON());
+  for (const currency of ['eur', 'ZZZ', '', null, undefined, 123]) {
+    assert.throws(() => wb.setCell(sheet, 0, 0, { style: { currency } }), RangeError);
+    assert.equal(JSON.stringify(wb.toJSON()), before);
+    assert.throws(() => formatValue(1, { format: 'number', currency }), RangeError);
+  }
+  const bad = wb.toJSON(); bad.sheets[0].cells[0][1].style.currency = 'ZZZ';
+  assert.throws(() => Workbook.fromJSON(bad), RangeError);
+});
+
+
+test('sheet structural grounding revision follows inserts, deletes, sorts and snapshot Undo/Redo only', () => {
+ const wb=make();let sheet=wb.activeSheet;
+ wb.setCell(sheet,0,0,{raw:'Header'});wb.setCell(sheet,1,0,{raw:'2'});wb.setCell(sheet,2,0,{raw:'1'});
+ assert.equal(sheet.grounding_structure_revision,0);
+ wb.applyStyle(sheet,{r1:1,c1:0,r2:2,c2:0},{format:'currency',currency:'EUR'});
+ assert.equal(sheet.grounding_structure_revision,0);
+ wb.structuralEdit(sheet,'row',1,1);assert.equal(sheet.grounding_structure_revision,1);
+ wb.undo();sheet=wb.activeSheet;assert.equal(sheet.grounding_structure_revision,0);
+ wb.redo();sheet=wb.activeSheet;assert.equal(sheet.grounding_structure_revision,1);
+ wb.structuralEdit(sheet,'row',1,-1);assert.equal(sheet.grounding_structure_revision,2);
+ const prior=wb.undoStack.length;wb.sort(sheet,{r1:0,c1:0,r2:2,c2:0},0,false,true);
+ assert.equal(sheet.grounding_structure_revision,3);assert.equal(wb.undoStack.length,prior+1);
+ assert.equal(sheet.raw(1,0),'1');wb.undo();sheet=wb.activeSheet;assert.equal(sheet.grounding_structure_revision,2);assert.equal(sheet.raw(1,0),'2');
+ const legacy=wb.toJSON();delete legacy.sheets[0].grounding_structure_revision;assert.equal(Workbook.fromJSON(legacy).activeSheet.grounding_structure_revision,0);
+ for(const value of [-1,1.5,'1']){const bad=wb.toJSON();bad.sheets[0].grounding_structure_revision=value;assert.throws(()=>Workbook.fromJSON(bad));}
+});

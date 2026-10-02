@@ -1,11 +1,11 @@
 {
   "harness": "inline opaque origin, in-memory Storage fixture",
-  "browser": "143.0.7499.4",
+  "browser": "154.0.8037.95",
   "backend": {
     "backend": "canvas2d",
     "reason": "WebGPU is not exposed by this browser."
   },
-  "passed": 33,
+  "passed": 36,
   "checks": [
     {
       "name": "Standalone app boots without an uncaught exception",
@@ -88,12 +88,17 @@
       "detail": null
     },
     {
+      "name": "Embedded tabs omit File and start collapsed",
+      "passed": true,
+      "detail": null
+    },
+    {
       "name": "Freeze panes uses active row and column",
       "passed": true,
       "detail": null
     },
     {
-      "name": "Cell notes persist into the model and panel",
+      "name": "Embedded spreadsheet hides app header, help and notes",
       "passed": true,
       "detail": null
     },
@@ -121,7 +126,7 @@
       "name": "XLSX export/import round-trip preserves calculated values",
       "passed": true,
       "detail": {
-        "bytes": 121828,
+        "bytes": 122243,
         "sheets": 3,
         "mismatches": [],
         "mergeCount": 24,
@@ -149,6 +154,16 @@
       "detail": null
     },
     {
+      "name": "Manual currency selector applies an explicit code",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Explicit mixed currencies and decimals survive real XLSX import/export with formulas and custom formats",
+      "passed": true,
+      "detail": null
+    },
+    {
       "name": "Native DEFLATE decompression imports a compressed XLSX",
       "passed": true,
       "detail": null
@@ -167,7 +182,7 @@
       "name": "Stress sheet creates 80,008 sparse cells",
       "passed": true,
       "detail": {
-        "wall_ms": 303.04
+        "wall_ms": 138.7
       }
     },
     {
@@ -182,8 +197,8 @@
       "name": "Stress view renders only its viewport",
       "passed": true,
       "detail": {
-        "visibleCells": 576,
-        "lastFrameCPUms": 4.400000000008731,
+        "visibleCells": 608,
+        "lastFrameCPUms": 2,
         "storedCells": 80008,
         "active": {
           "r": 10000,
@@ -208,8 +223,8 @@
     }
   ],
   "stressMetrics": {
-    "visibleCells": 576,
-    "lastFrameCPUms": 4.400000000008731,
+    "visibleCells": 608,
+    "lastFrameCPUms": 2,
     "storedCells": 80008,
     "active": {
       "r": 10000,

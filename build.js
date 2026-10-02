@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = path.dirname(fileURLToPath(import.meta.url));
-const names = ['engine', 'renderer', 'sample', 'io', 'app'];
+const names = ['currency', 'engine', 'renderer', 'sample', 'io', 'app'];
 let js = '"use strict";\n(() => {\nconst __modules = Object.create(null);\n';
 for (const name of names) {
   let source = fs.readFileSync(path.join(root, 'src', name + '.js'), 'utf8');

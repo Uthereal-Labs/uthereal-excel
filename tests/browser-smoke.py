@@ -117,6 +117,17 @@ with sync_playwright() as p:
     roundtrip = page.evaluate('''async()=>{const original=Gridline.createSampleWorkbook();const bytes=Gridline.exportXLSX(original);const {workbook:restored,warnings}=await Gridline.importXLSX(bytes,'Roundtrip');let mismatches=[];for(let i=0;i<original.sheets.length;i++){const a=original.sheets[i],b=restored.sheets[i];for(const [key,cell]of a.cells){if(!cell.raw)continue;const[r,c]=key.split(',').map(Number);const av=original.value(a,r,c),bv=restored.value(b,r,c);if(String(av)!==String(bv))mismatches.push(a.name+'!'+key+': '+av+' != '+bv);}}return {bytes:bytes.length,sheets:restored.sheets.length,mismatches,mergeCount:restored.sheets[0].merges.length,originalMerges:original.sheets[0].merges.length,freeze:restored.sheets[1].freezeRows,name:restored.names.COST_RATIO,style:restored.sheets[0].get(1,1).style,columns:restored.sheets[0].colWidths.size,warnings};}''')
     check('XLSX export/import round-trip preserves calculated values', roundtrip['sheets']==3 and not roundtrip['mismatches'], roundtrip)
     check('XLSX round-trip preserves basic workbook structures', roundtrip['mergeCount']==roundtrip['originalMerges'] and roundtrip['freeze']==1 and roundtrip['name'] and roundtrip['columns']>0)
+    page.locator('#currency-code').select_option('EUR')
+    check('Manual currency selector applies an explicit code', page.evaluate("gridline.sheet.get(gridline.active.r,gridline.active.c).style.currency") == 'EUR')
+    currency_roundtrip = page.evaluate("""async()=>{
+      const w=new Gridline.Workbook(), s=w.activeSheet;
+      const codes=['EUR','USD','GBP','CHF','JPY'];
+      codes.forEach((currency,c)=>w.setCell(s,0,c,{raw:'=1234.5',style:{format:'currency',currency,decimals:c%2?0:2}}));
+      w.setCell(s,1,0,{raw:'17',style:{format:'€#,##0.000'}});
+      const {workbook:r}=await Gridline.importXLSX(Gridline.exportXLSX(w));
+      return codes.every((currency,c)=>r.activeSheet.get(0,c).style.currency===currency&&r.activeSheet.get(0,c).style.decimals===(c%2?0:2)&&r.activeSheet.raw(0,c)==='=1234.5'&&r.display(r.activeSheet,0,c)===w.display(s,0,c))&&r.activeSheet.get(1,0).style.format==='€#,##0.000';
+    }""")
+    check('Explicit mixed currencies and decimals survive real XLSX import/export with formulas and custom formats', currency_roundtrip)
     encoded = page.evaluate("btoa(Array.from(Gridline.exportXLSX(Gridline.createSampleWorkbook()),v=>String.fromCharCode(v)).join(''))")
     original_zip = zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded)))
     def repack(date1904=False):

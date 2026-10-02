@@ -1,3 +1,4 @@
+import { normalizeCurrencyStyle } from './currency.js';
 /** Gridline calculation and document core. No DOM, network calls, eval, or dependencies. */
 export const MAX_ROWS = 1048576;
 export const MAX_COLS = 16384;
@@ -410,6 +411,7 @@ export function rawValue(raw) {
 const formatters = new Map();
 function numFormat(locale, options, value) { const key = JSON.stringify([locale, options]); if (!formatters.has(key)) formatters.set(key, new Intl.NumberFormat(locale, options)); return formatters.get(key).format(value); }
 export function formatValue(value, style = {}) {
+  normalizeCurrencyStyle(style);
   if (value instanceof FormulaError) return value.code;
   if (value === null || value === undefined) return '';
   if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
@@ -417,7 +419,7 @@ export function formatValue(value, style = {}) {
   const fmt = style.format || 'general', dp = style.decimals;
   if (fmt === 'date' || /[ymd]/i.test(fmt) && !/[Ee][+-]/.test(fmt) && fmt !== 'number' && fmt !== 'currency') return serialDate(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
   if (fmt === 'percent' || fmt.includes('%')) return numFormat('en-US', { style: 'percent', minimumFractionDigits: dp ?? (fmt === 'percent' ? 1 : (fmt.split('.')[1]?.match(/[0#]/g)?.length ?? 0)), maximumFractionDigits: dp ?? (fmt === 'percent' ? 1 : (fmt.split('.')[1]?.match(/[0#]/g)?.length ?? 0)) }, value);
-  if (fmt === 'currency' || /[$€£]/.test(fmt)) return numFormat('en-US', { style: 'currency', currency: fmt.includes('€') ? 'EUR' : fmt.includes('£') ? 'GBP' : 'USD', minimumFractionDigits: dp ?? 0, maximumFractionDigits: dp ?? 0 }, value);
+  if (fmt === 'currency' || /[$€£]/.test(fmt)) return numFormat('en-US', { style: 'currency', currency: fmt === 'currency' ? style.currency ?? 'USD' : fmt.includes('€') ? 'EUR' : fmt.includes('£') ? 'GBP' : 'USD', minimumFractionDigits: dp ?? 0, maximumFractionDigits: dp ?? 0 }, value);
   if (fmt === 'number' || fmt === 'integer' || /[0#]/.test(fmt)) { const d = dp ?? (fmt === 'integer' ? 0 : fmt === 'number' ? 2 : (fmt.split('.')[1]?.match(/[0#]/g)?.length ?? 0)); return numFormat('en-US', { useGrouping: true, minimumFractionDigits: d, maximumFractionDigits: d }, value); }
   if (dp !== undefined) return numFormat('en-US', { useGrouping: false, minimumFractionDigits: dp, maximumFractionDigits: dp }, value);
   return Math.abs(value) >= 1e12 || Math.abs(value) < 1e-8 && value !== 0 ? value.toExponential(5) : String(Number(value.toPrecision(12)));
@@ -426,8 +428,8 @@ let nextSheetId = 1;
 export class Sheet {
   constructor(name = 'Sheet1', data = null) {
     this.id = `s${Date.now().toString(36)}${nextSheetId++}`; this.name = name; this.cells = new Map(); this.colWidths = new Map(); this.rowHeights = new Map();
-    this.merges = []; this.conditionalRules = []; this.hiddenRows = new Set(); this.filters = null; this.freezeRows = 0; this.freezeCols = 0; this.charts = []; this.gridlines = true; this.color = '#18835a'; this.revision = 0; this._used = null;
-    if (data) { for (const prop of ['id','name','merges','conditionalRules','filters','freezeRows','freezeCols','charts','gridlines','color','revision','protected','dataRegion']) if (Object.hasOwn(data, prop)) this[prop] = data[prop]; this.cells = new Map(data.cells ?? []); this.colWidths = new Map(data.colWidths ?? []); this.rowHeights = new Map(data.rowHeights ?? []); this.hiddenRows = new Set(data.hiddenRows ?? []); this._used = null; }
+    this.merges = []; this.conditionalRules = []; this.hiddenRows = new Set(); this.filters = null; this.freezeRows = 0; this.freezeCols = 0; this.charts = []; this.gridlines = true; this.color = '#18835a'; this.revision = 0; this.grounding_structure_revision = 0; this._used = null;
+    if (data) { for (const prop of ['id','name','merges','conditionalRules','filters','freezeRows','freezeCols','charts','gridlines','color','revision','protected','dataRegion','grounding_structure_revision']) if (Object.hasOwn(data, prop)) this[prop] = data[prop]; this.cells = new Map((data.cells ?? []).map(([key, cell]) => [key, cell.style ? { ...cell, style: normalizeCurrencyStyle({ ...cell.style }) } : cell])); this.colWidths = new Map(data.colWidths ?? []); this.rowHeights = new Map(data.rowHeights ?? []); this.hiddenRows = new Set(data.hiddenRows ?? []); this._used = null; }
   }
   get(r, c) { return this.cells.get(keyOf(r, c)); }
   raw(r, c) { return this.get(r, c)?.raw ?? ''; }
@@ -454,6 +456,7 @@ export class Workbook {
     wb.sheets = data.sheets.map(d => {
       if (!Array.isArray(d.cells) || d.cells.length > 1000000) throw new Error('Workbook cell limit exceeded.');
       const sheet = new Sheet(String(d.name).slice(0, 31), d); sheet.name = String(d.name).slice(0, 31);
+      if (!Number.isSafeInteger(sheet.grounding_structure_revision) || sheet.grounding_structure_revision < 0) throw new Error('Invalid grounding structure revision.');
       for (const [k, cell] of sheet.cells) { const [r, c] = k.split(',').map(Number); if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || c < 0 || r >= MAX_ROWS || c >= MAX_COLS || typeof cell.raw !== 'string') throw new Error('Invalid cell record.'); }
       return sheet;
     });
@@ -484,7 +487,7 @@ export class Workbook {
     if (patch === null) sheet.cells.delete(key);
     else {
       const next = { raw: '', ...clone(before), ...clone(patch) }; next.raw = String(next.raw).slice(0, 32767);
-      if (patch.style) next.style = { ...before?.style, ...clone(patch.style) };
+      if (patch.style) next.style = normalizeCurrencyStyle({ ...before?.style, ...clone(patch.style) });
       if (!next.raw && !next.style && !next.note) sheet.cells.delete(key); else sheet.cells.set(key, next);
     }
     sheet.revision++; sheet._used = null;
@@ -541,7 +544,9 @@ export class Workbook {
     });
   }
   structuralEdit(sheet, axis, at, delta) {
+    if (!['row', 'column'].includes(axis) || !Number.isInteger(at) || at < 0 || at >= (axis === 'row' ? MAX_ROWS : MAX_COLS) || ![-1, 1].includes(delta)) throw new Error('Invalid structural edit.');
     this.mutate(`${delta > 0 ? 'Insert' : 'Delete'} ${axis}`, () => {
+      sheet.grounding_structure_revision++;
       const coord = axis === 'row' ? 0 : 1, limit = axis === 'row' ? MAX_ROWS : MAX_COLS, next = new Map();
       for (const [key, cell] of sheet.cells) { const p = key.split(',').map(Number); if (delta < 0 && p[coord] === at) continue; if (p[coord] >= at) p[coord] += delta; if (p[coord] < limit) next.set(keyOf(...p), cell); }
       sheet.cells = next;
@@ -560,6 +565,13 @@ export class Workbook {
     const first = q.r1 + (header ? 1 : 0); if (first > q.r2) return;
     const rows = []; for (let r = first; r <= q.r2; r++) rows.push({ r, value: this.value(sheet, r, column), cells: Array.from({ length: q.c2 - q.c1 + 1 }, (_, i) => clone(sheet.get(r, q.c1 + i) ?? { raw: '' })) });
     rows.sort((a, b) => { if (a.value == null) return b.value == null ? a.r - b.r : 1; if (b.value == null) return -1; return (compare(a.value instanceof FormulaError ? a.value.code : a.value, b.value instanceof FormulaError ? b.value.code : b.value) * (descending ? -1 : 1)) || a.r - b.r; });
-    this.transaction('Sort range', () => rows.forEach((row, i) => row.cells.forEach((cell, j) => { cell.raw = shiftFormula(cell.raw, first + i - row.r, 0); this.setCell(sheet, first + i, q.c1 + j, cell); })));
+    this.mutate('Sort range', () => {
+      sheet.grounding_structure_revision++;
+      rows.forEach((row, i) => row.cells.forEach((cell, j) => {
+        cell.raw = shiftFormula(cell.raw, first + i - row.r, 0);
+        const key = keyOf(first + i, q.c1 + j);
+        if (!cell.raw && !cell.style && !cell.note) sheet.cells.delete(key); else sheet.cells.set(key, cell);
+      }));
+    });
   }
 }
