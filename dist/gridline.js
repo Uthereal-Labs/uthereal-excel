@@ -2,8 +2,38 @@
 (() => {
 const __modules = Object.create(null);
 
+// ===== currency.js =====
+__modules["currency"] = (() => {
+/** Supported ISO 4217 monetary codes provided by the maintained Intl runtime. */
+const SUPPORTED_CURRENCIES = Object.freeze(Intl.supportedValuesOf('currency'));
+const supportedCurrencies = new Set(SUPPORTED_CURRENCIES);
+/** @param {unknown} code @returns {string} Validated uppercase currency; never coerces invalid input. */
+function normalizeCurrency(code) {
+  if (typeof code !== 'string' || !/^[A-Z]{3}$/.test(code) || !supportedCurrencies.has(code)) throw new RangeError('Currency must be a supported uppercase ISO 4217 code.');
+  return code;
+}
+/** @param {{currency?: string, format?: string, decimals?: number}} style */
+function normalizeCurrencyStyle(style) {
+  if (Object.hasOwn(style, 'currency')) normalizeCurrency(style.currency);
+  return style;
+}
+/** Exact format emitted by Gridline; other custom number formats remain custom. */
+function currencyNumberFormat(style) {
+  normalizeCurrencyStyle(style);
+  return `[\u0024${style.currency ?? 'USD'}]#,##0${style.decimals === 0 ? '' : '.' + '0'.repeat(style.decimals ?? 0)}`;
+}
+/** @param {string} format @returns {{format: string, currency?: string, decimals?: number}} */
+function styleFromNumberFormat(format) {
+  const match = /^\[\$([A-Z]{3})\]#,##0(?:\.(0+))?$/.exec(format);
+  return match ? { format: 'currency', currency: normalizeCurrency(match[1]), decimals: match[2]?.length ?? 0 } : { format };
+}
+
+return { SUPPORTED_CURRENCIES, normalizeCurrency, normalizeCurrencyStyle, currencyNumberFormat, styleFromNumberFormat };
+})();
+
 // ===== engine.js =====
 __modules["engine"] = (() => {
+const { normalizeCurrencyStyle } = __modules["currency"];
 /** Gridline calculation and document core. No DOM, network calls, eval, or dependencies. */
 const MAX_ROWS = 1048576;
 const MAX_COLS = 16384;
@@ -416,6 +446,7 @@ function rawValue(raw) {
 const formatters = new Map();
 function numFormat(locale, options, value) { const key = JSON.stringify([locale, options]); if (!formatters.has(key)) formatters.set(key, new Intl.NumberFormat(locale, options)); return formatters.get(key).format(value); }
 function formatValue(value, style = {}) {
+  normalizeCurrencyStyle(style);
   if (value instanceof FormulaError) return value.code;
   if (value === null || value === undefined) return '';
   if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
@@ -423,7 +454,7 @@ function formatValue(value, style = {}) {
   const fmt = style.format || 'general', dp = style.decimals;
   if (fmt === 'date' || /[ymd]/i.test(fmt) && !/[Ee][+-]/.test(fmt) && fmt !== 'number' && fmt !== 'currency') return serialDate(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
   if (fmt === 'percent' || fmt.includes('%')) return numFormat('en-US', { style: 'percent', minimumFractionDigits: dp ?? (fmt === 'percent' ? 1 : (fmt.split('.')[1]?.match(/[0#]/g)?.length ?? 0)), maximumFractionDigits: dp ?? (fmt === 'percent' ? 1 : (fmt.split('.')[1]?.match(/[0#]/g)?.length ?? 0)) }, value);
-  if (fmt === 'currency' || /[$€£]/.test(fmt)) return numFormat('en-US', { style: 'currency', currency: fmt.includes('€') ? 'EUR' : fmt.includes('£') ? 'GBP' : 'USD', minimumFractionDigits: dp ?? 0, maximumFractionDigits: dp ?? 0 }, value);
+  if (fmt === 'currency' || /[$€£]/.test(fmt)) return numFormat('en-US', { style: 'currency', currency: fmt === 'currency' ? style.currency ?? 'USD' : fmt.includes('€') ? 'EUR' : fmt.includes('£') ? 'GBP' : 'USD', minimumFractionDigits: dp ?? 0, maximumFractionDigits: dp ?? 0 }, value);
   if (fmt === 'number' || fmt === 'integer' || /[0#]/.test(fmt)) { const d = dp ?? (fmt === 'integer' ? 0 : fmt === 'number' ? 2 : (fmt.split('.')[1]?.match(/[0#]/g)?.length ?? 0)); return numFormat('en-US', { useGrouping: true, minimumFractionDigits: d, maximumFractionDigits: d }, value); }
   if (dp !== undefined) return numFormat('en-US', { useGrouping: false, minimumFractionDigits: dp, maximumFractionDigits: dp }, value);
   return Math.abs(value) >= 1e12 || Math.abs(value) < 1e-8 && value !== 0 ? value.toExponential(5) : String(Number(value.toPrecision(12)));
@@ -433,7 +464,7 @@ class Sheet {
   constructor(name = 'Sheet1', data = null) {
     this.id = `s${Date.now().toString(36)}${nextSheetId++}`; this.name = name; this.cells = new Map(); this.colWidths = new Map(); this.rowHeights = new Map();
     this.merges = []; this.conditionalRules = []; this.hiddenRows = new Set(); this.filters = null; this.freezeRows = 0; this.freezeCols = 0; this.charts = []; this.gridlines = true; this.color = '#18835a'; this.revision = 0; this._used = null;
-    if (data) { for (const prop of ['id','name','merges','conditionalRules','filters','freezeRows','freezeCols','charts','gridlines','color','revision','protected','dataRegion']) if (Object.hasOwn(data, prop)) this[prop] = data[prop]; this.cells = new Map(data.cells ?? []); this.colWidths = new Map(data.colWidths ?? []); this.rowHeights = new Map(data.rowHeights ?? []); this.hiddenRows = new Set(data.hiddenRows ?? []); this._used = null; }
+    if (data) { for (const prop of ['id','name','merges','conditionalRules','filters','freezeRows','freezeCols','charts','gridlines','color','revision','protected','dataRegion']) if (Object.hasOwn(data, prop)) this[prop] = data[prop]; this.cells = new Map((data.cells ?? []).map(([key, cell]) => [key, cell.style ? { ...cell, style: normalizeCurrencyStyle({ ...cell.style }) } : cell])); this.colWidths = new Map(data.colWidths ?? []); this.rowHeights = new Map(data.rowHeights ?? []); this.hiddenRows = new Set(data.hiddenRows ?? []); this._used = null; }
   }
   get(r, c) { return this.cells.get(keyOf(r, c)); }
   raw(r, c) { return this.get(r, c)?.raw ?? ''; }
@@ -490,7 +521,7 @@ class Workbook {
     if (patch === null) sheet.cells.delete(key);
     else {
       const next = { raw: '', ...clone(before), ...clone(patch) }; next.raw = String(next.raw).slice(0, 32767);
-      if (patch.style) next.style = { ...before?.style, ...clone(patch.style) };
+      if (patch.style) next.style = normalizeCurrencyStyle({ ...before?.style, ...clone(patch.style) });
       if (!next.raw && !next.style && !next.note) sheet.cells.delete(key); else sheet.cells.set(key, next);
     }
     sheet.revision++; sheet._used = null;
@@ -968,6 +999,7 @@ return { createSampleWorkbook };
 
 // ===== io.js =====
 __modules["io"] = (() => {
+const { currencyNumberFormat, styleFromNumberFormat, normalizeCurrencyStyle } = __modules["currency"];
 /** Local-only CSV / Gridline JSON / basic OOXML interoperability. No third-party libraries. */
 const { Workbook, Sheet, keyOf, address, parseAddress, parseRange, shiftFormula, FormulaError, rawValue } = __modules["engine"];
 function parseDelimited(text, delimiter = null) {
@@ -1067,14 +1099,14 @@ const packageRelNS = 'http://schemas.openxmlformats.org/package/2006/relationshi
 const colorARGB = color => 'FF' + (color || '#000000').replace('#', '').toUpperCase();
 function styleTable(workbook) {
   const styles = [{}], ids = new Map([['{}', 0]]);
-  const idFor = style => { const normalized = Object.fromEntries(Object.entries(style ?? {}).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b))); const key = JSON.stringify(normalized); if (!ids.has(key)) { ids.set(key, styles.length); styles.push(normalized); } return ids.get(key); };
+  const idFor = style => { normalizeCurrencyStyle(style ?? {}); const normalized = Object.fromEntries(Object.entries(style ?? {}).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b))); const key = JSON.stringify(normalized); if (!ids.has(key)) { ids.set(key, styles.length); styles.push(normalized); } return ids.get(key); };
   for (const sheet of workbook.sheets) for (const cell of sheet.cells.values()) idFor(cell.style);
   const formats = new Map(), fonts = [], fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'], xfs = [];
   styles.forEach((s, i) => {
     const size = (s.fontSize ?? 13) * 0.75; fonts.push(`<font>${s.bold ? '<b/>' : ''}${s.italic ? '<i/>' : ''}${s.underline ? '<u/>' : ''}<sz val="${size}"/><color rgb="${colorARGB(s.color || '#293b32')}"/><name val="${escapeXML(s.fontFamily?.split(',')[0] || 'Aptos')}"/></font>`);
     let fillId = 0; if (s.fill) { fillId = fills.length; fills.push(`<fill><patternFill patternType="solid"><fgColor rgb="${colorARGB(s.fill)}"/><bgColor indexed="64"/></patternFill></fill>`); }
     let fmt = s.format || 'general'; const d = Math.max(0, Math.min(10, s.decimals ?? (fmt === 'percent' ? 1 : fmt === 'number' ? 2 : 0))), decimals = d ? '.' + '0'.repeat(d) : '';
-    fmt = fmt === 'general' ? 'General' : fmt === 'currency' ? '$#,##0' + decimals : fmt === 'percent' ? '0' + decimals + '%' : fmt === 'integer' ? '#,##0' : fmt === 'number' ? '#,##0' + decimals : fmt === 'date' ? 'mmm d, yyyy' : fmt;
+    fmt = fmt === 'general' ? 'General' : fmt === 'currency' ? currencyNumberFormat({ ...s, decimals: d }) : fmt === 'percent' ? '0' + decimals + '%' : fmt === 'integer' ? '#,##0' : fmt === 'number' ? '#,##0' + decimals : fmt === 'date' ? 'mmm d, yyyy' : fmt;
     let numFmtId = 0; if (fmt !== 'General') { if (!formats.has(fmt)) formats.set(fmt, 164 + formats.size); numFmtId = formats.get(fmt); }
     xfs.push(`<xf numFmtId="${numFmtId}" fontId="${i}" fillId="${fillId}" borderId="${s.border ? 1 : 0}" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1" applyAlignment="1"><alignment vertical="center"${s.align ? ` horizontal="${s.align}"` : ''}${s.wrap ? ' wrapText="1"' : ''}/></xf>`);
   });
@@ -1133,7 +1165,7 @@ async function importXLSX(buffer, title = 'Imported workbook') {
     const cssColor = el => { const rgb = el?.getAttribute('rgb'); return rgb ? '#' + rgb.slice(-6) : undefined; };
     styles = xfs.map(xf => {
       const font = fonts[+xf.getAttribute('fontId')], fill = fills[+xf.getAttribute('fillId')], alignment = firstElement(xf, 'alignment'), id = +xf.getAttribute('numFmtId');
-      const style = { format: formats.get(id) || builtinFormats[id] || 'general' };
+      const style = styleFromNumberFormat(formats.get(id) || builtinFormats[id] || 'general');
       if (font) { style.bold = !!firstElement(font, 'b'); style.italic = !!firstElement(font, 'i'); style.underline = !!firstElement(font, 'u'); const fs = firstElement(font, 'sz')?.getAttribute('val'); if (fs) style.fontSize = Math.min(72, +fs / 0.75); const color = cssColor(firstElement(font, 'color')); if (color) style.color = color; }
       const color = fill ? cssColor(firstElement(fill, 'fgColor')) : null; if (color && firstElement(fill, 'patternFill')?.getAttribute('patternType') === 'solid') style.fill = color;
       if (alignment) { const a = alignment.getAttribute('horizontal'); if (['left', 'center', 'right'].includes(a)) style.align = a; style.wrap = alignment.getAttribute('wrapText') === '1'; }
@@ -1181,6 +1213,7 @@ return { parseDelimited, serializeDelimited, exportCSV, workbookFromCSV, downloa
 
 // ===== app.js =====
 __modules["app"] = (() => {
+const { SUPPORTED_CURRENCIES, normalizeCurrency } = __modules["currency"];
 const { Workbook, MAX_ROWS, MAX_COLS, MAX_RANGE_CELLS, FUNCTIONS, FormulaError, address, parseAddress, parseRange, normalizedRange, rangeAddress, cellsIn, keyOf, shiftFormula, formatValue, colName } = __modules["engine"];
 const { GridRenderer } = __modules["renderer"];
 const { createSampleWorkbook } = __modules["sample"];
@@ -1254,6 +1287,7 @@ class GridlineApp {
     const style = this.sheet.get(this.active.r, this.active.c)?.style || {};
     for (const prop of ['bold', 'italic', 'underline', 'wrap']) $$(`[data-action="${prop}"]`).forEach(b => b.classList.toggle('active', !!style[prop]));
     for (const align of ['left', 'center', 'right']) $$(`[data-action="align-${align}"]`).forEach(b => b.classList.toggle('active', style.align === align));
+    const currency = $('#currency-code'); if (currency) currency.value = style.currency ?? 'USD';
     const format = $('#number-format'); if (format) format.value = ['general','number','currency','percent','date','integer'].includes(style.format) ? style.format : 'general';
     const size = $('#font-size'); if (size) size.value = Math.round((style.fontSize || 13) * 0.75);
     $$('[data-action="undo"]').forEach(b => b.disabled = !this.workbook.undoStack.length); $$('[data-action="redo"]').forEach(b => b.disabled = !this.workbook.redoStack.length);
@@ -1476,7 +1510,7 @@ class GridlineApp {
       html += group('Clipboard', tool('paste','Paste','paste',true,true) + stack(tool('cut','Cut','cut'),tool('copy','Copy','copy')) + stack(tool('format-painter','Format painter','paint')));
       html += group('Font', `<div class="font-tools"><div class="ribbon-row"><select id="font-family" class="font-select" aria-label="Font family"><option>Aptos</option><option>Arial</option><option>Georgia</option><option>Verdana</option><option>Courier New</option></select><select id="font-size" class="font-size" aria-label="Font size">${[8,9,10,11,12,14,16,18,20,24,28,32,36,48].map(s => `<option${s === 10 ? ' selected' : ''}>${s}</option>`).join('')}</select>${mini('font-larger','plus','Increase font size','A⁺')}${mini('font-smaller','plus','Decrease font size','A⁻')}</div><div class="ribbon-row">${mini('bold','','Bold (Ctrl/⌘ B)','<span class="text-bold">B</span>')}${mini('italic','','Italic (Ctrl/⌘ I)','<span class="text-italic">I</span>')}${mini('underline','','Underline (Ctrl/⌘ U)','<span class="text-underline">U</span>')}<span class="ribbon-sep"></span>${mini('borders','border','Toggle cell borders')}<span class="ribbon-sep"></span><button class="mini-tool fill-color-tool" data-action="fill-color" title="Fill color" aria-label="Fill color">${icon('fill')}</button><button class="mini-tool font-color-tool" data-action="text-color" title="Font color" aria-label="Font color">A</button></div></div>`);
       html += group('Alignment', `<div class="font-tools"><div class="ribbon-row">${mini('align-left','alignLeft','Align left')}${mini('align-center','alignCenter','Center')}${mini('align-right','alignRight','Align right')}${tool('wrap','Wrap text','wrap')}</div><div class="ribbon-row">${tool('merge','Merge & center','merge')}</div></div>`);
-      html += group('Number', `<div class="font-tools"><div class="ribbon-row"><select id="number-format" class="number-format" aria-label="Number format"><option value="general">General</option><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percentage</option><option value="date">Short date</option><option value="integer">Integer</option></select></div><div class="ribbon-row">${mini('currency','','Currency','$')}${mini('percent','percent','Percentage')}${mini('number','','Number with separator',',')}<span class="ribbon-sep"></span>${mini('decimal-less','','Decrease decimals','.0←')}${mini('decimal-more','','Increase decimals','→.00')}</div></div>`);
+      html += group('Number', `<div class="font-tools"><div class="ribbon-row"><select id="number-format" class="number-format" aria-label="Number format"><option value="general">General</option><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percentage</option><option value="date">Short date</option><option value="integer">Integer</option></select><select id="currency-code" aria-label="Currency">${SUPPORTED_CURRENCIES.map(code => `<option value="${code}">${code}</option>`).join('')}</select></div><div class="ribbon-row">${mini('currency','','Currency','$')}${mini('percent','percent','Percentage')}${mini('number','','Number with separator',',')}<span class="ribbon-sep"></span>${mini('decimal-less','','Decrease decimals','.0←')}${mini('decimal-more','','Increase decimals','→.00')}</div></div>`);
       html += group('Styles', tool('conditional','Conditional<br>formatting','conditional',true,true) + tool('format-table','Format as<br>table','table',true,true) + `<div class="style-gallery"><button class="style-chip" data-action="style-normal">Normal</button><button class="style-chip good" data-action="style-good">Good</button><button class="style-chip heading" data-action="style-heading">Heading</button><button class="style-chip warning" data-action="style-warning">Warning</button></div>`, 'styles-group');
       html += group('Cells', tool('insert-menu','Insert','insert',true,true) + tool('delete-menu','Delete','delete',true,true));
       html += group('Editing', stack(tool('autosum','AutoSum','sum'),tool('clear-menu','Clear','clear')) + tool('sort-filter','Sort &<br>filter','sort',true,true) + tool('find','Find &<br>select','search',true,true));
@@ -1494,7 +1528,8 @@ class GridlineApp {
     $('#ribbon').innerHTML = html;
     $('#font-family')?.addEventListener('change', e => this.errorBoundary(() => this.format({ fontFamily: e.target.value })));
     $('#font-size')?.addEventListener('change', e => this.errorBoundary(() => this.format({ fontSize: +e.target.value / .75 })));
-    $('#number-format')?.addEventListener('change', e => this.errorBoundary(() => this.format({ format: e.target.value, decimals: undefined })));
+    $('#currency-code')?.addEventListener('change', e => this.errorBoundary(() => this.format({ format: 'currency', currency: normalizeCurrency(e.target.value) })));
+    $('#number-format')?.addEventListener('change', e => this.errorBoundary(() => this.format({ format: e.target.value, ...(e.target.value === 'currency' ? { currency: $('#currency-code').value } : {}), decimals: undefined })));
     this.updateUI();
   }
   renderTabs() {
@@ -1549,7 +1584,8 @@ class GridlineApp {
       case 'fill-color': $('#fill-picker').click(); return;
       case 'text-color': $('#text-picker').click(); return;
       case 'borders': return this.format({ border: !style.border });
-      case 'currency': case 'percent': case 'number': return this.format({ format: action, decimals: undefined });
+      case 'currency': return this.format({ format: action, currency: style.currency ?? 'USD', decimals: undefined });
+      case 'percent': case 'number': return this.format({ format: action, decimals: undefined });
       case 'decimal-less': return this.format({ decimals: Math.max(0, (style.decimals ?? 2) - 1) });
       case 'decimal-more': return this.format({ decimals: Math.min(10, (style.decimals ?? 0) + 1) });
       case 'font-larger': return this.format({ fontSize: Math.min(72, (style.fontSize || 13) + 2) });
@@ -1825,6 +1861,8 @@ class GridlineApp {
 }
 const app = new GridlineApp();
 // Intentional diagnostics/embedding API. The model remains independent of the view.
+app.supportedCurrencies = SUPPORTED_CURRENCIES;
+app.normalizeCurrency = normalizeCurrency;
 window.gridline = app;
 
 window.Gridline = Object.freeze({ version: '0.1.0', Workbook, GridRenderer, exportXLSX, importXLSX, parseDelimited, serializeDelimited, exportCSV, createSampleWorkbook });

@@ -1,3 +1,4 @@
+import { normalizeCurrencyStyle } from './currency.js';
 /** Gridline calculation and document core. No DOM, network calls, eval, or dependencies. */
 export const MAX_ROWS = 1048576;
 export const MAX_COLS = 16384;
@@ -410,6 +411,7 @@ export function rawValue(raw) {
 const formatters = new Map();
 function numFormat(locale, options, value) { const key = JSON.stringify([locale, options]); if (!formatters.has(key)) formatters.set(key, new Intl.NumberFormat(locale, options)); return formatters.get(key).format(value); }
 export function formatValue(value, style = {}) {
+  normalizeCurrencyStyle(style);
   if (value instanceof FormulaError) return value.code;
   if (value === null || value === undefined) return '';
   if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
@@ -417,7 +419,7 @@ export function formatValue(value, style = {}) {
   const fmt = style.format || 'general', dp = style.decimals;
   if (fmt === 'date' || /[ymd]/i.test(fmt) && !/[Ee][+-]/.test(fmt) && fmt !== 'number' && fmt !== 'currency') return serialDate(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
   if (fmt === 'percent' || fmt.includes('%')) return numFormat('en-US', { style: 'percent', minimumFractionDigits: dp ?? (fmt === 'percent' ? 1 : (fmt.split('.')[1]?.match(/[0#]/g)?.length ?? 0)), maximumFractionDigits: dp ?? (fmt === 'percent' ? 1 : (fmt.split('.')[1]?.match(/[0#]/g)?.length ?? 0)) }, value);
-  if (fmt === 'currency' || /[$€£]/.test(fmt)) return numFormat('en-US', { style: 'currency', currency: fmt.includes('€') ? 'EUR' : fmt.includes('£') ? 'GBP' : 'USD', minimumFractionDigits: dp ?? 0, maximumFractionDigits: dp ?? 0 }, value);
+  if (fmt === 'currency' || /[$€£]/.test(fmt)) return numFormat('en-US', { style: 'currency', currency: fmt === 'currency' ? style.currency ?? 'USD' : fmt.includes('€') ? 'EUR' : fmt.includes('£') ? 'GBP' : 'USD', minimumFractionDigits: dp ?? 0, maximumFractionDigits: dp ?? 0 }, value);
   if (fmt === 'number' || fmt === 'integer' || /[0#]/.test(fmt)) { const d = dp ?? (fmt === 'integer' ? 0 : fmt === 'number' ? 2 : (fmt.split('.')[1]?.match(/[0#]/g)?.length ?? 0)); return numFormat('en-US', { useGrouping: true, minimumFractionDigits: d, maximumFractionDigits: d }, value); }
   if (dp !== undefined) return numFormat('en-US', { useGrouping: false, minimumFractionDigits: dp, maximumFractionDigits: dp }, value);
   return Math.abs(value) >= 1e12 || Math.abs(value) < 1e-8 && value !== 0 ? value.toExponential(5) : String(Number(value.toPrecision(12)));
@@ -427,7 +429,7 @@ export class Sheet {
   constructor(name = 'Sheet1', data = null) {
     this.id = `s${Date.now().toString(36)}${nextSheetId++}`; this.name = name; this.cells = new Map(); this.colWidths = new Map(); this.rowHeights = new Map();
     this.merges = []; this.conditionalRules = []; this.hiddenRows = new Set(); this.filters = null; this.freezeRows = 0; this.freezeCols = 0; this.charts = []; this.gridlines = true; this.color = '#18835a'; this.revision = 0; this._used = null;
-    if (data) { for (const prop of ['id','name','merges','conditionalRules','filters','freezeRows','freezeCols','charts','gridlines','color','revision','protected','dataRegion']) if (Object.hasOwn(data, prop)) this[prop] = data[prop]; this.cells = new Map(data.cells ?? []); this.colWidths = new Map(data.colWidths ?? []); this.rowHeights = new Map(data.rowHeights ?? []); this.hiddenRows = new Set(data.hiddenRows ?? []); this._used = null; }
+    if (data) { for (const prop of ['id','name','merges','conditionalRules','filters','freezeRows','freezeCols','charts','gridlines','color','revision','protected','dataRegion']) if (Object.hasOwn(data, prop)) this[prop] = data[prop]; this.cells = new Map((data.cells ?? []).map(([key, cell]) => [key, cell.style ? { ...cell, style: normalizeCurrencyStyle({ ...cell.style }) } : cell])); this.colWidths = new Map(data.colWidths ?? []); this.rowHeights = new Map(data.rowHeights ?? []); this.hiddenRows = new Set(data.hiddenRows ?? []); this._used = null; }
   }
   get(r, c) { return this.cells.get(keyOf(r, c)); }
   raw(r, c) { return this.get(r, c)?.raw ?? ''; }
@@ -484,7 +486,7 @@ export class Workbook {
     if (patch === null) sheet.cells.delete(key);
     else {
       const next = { raw: '', ...clone(before), ...clone(patch) }; next.raw = String(next.raw).slice(0, 32767);
-      if (patch.style) next.style = { ...before?.style, ...clone(patch.style) };
+      if (patch.style) next.style = normalizeCurrencyStyle({ ...before?.style, ...clone(patch.style) });
       if (!next.raw && !next.style && !next.note) sheet.cells.delete(key); else sheet.cells.set(key, next);
     }
     sheet.revision++; sheet._used = null;

@@ -1,3 +1,4 @@
+import { currencyNumberFormat, styleFromNumberFormat, normalizeCurrencyStyle } from './currency.js';
 /** Local-only CSV / Gridline JSON / basic OOXML interoperability. No third-party libraries. */
 import { Workbook, Sheet, keyOf, address, parseAddress, parseRange, shiftFormula, FormulaError, rawValue } from './engine.js';
 export function parseDelimited(text, delimiter = null) {
@@ -97,14 +98,14 @@ const packageRelNS = 'http://schemas.openxmlformats.org/package/2006/relationshi
 const colorARGB = color => 'FF' + (color || '#000000').replace('#', '').toUpperCase();
 function styleTable(workbook) {
   const styles = [{}], ids = new Map([['{}', 0]]);
-  const idFor = style => { const normalized = Object.fromEntries(Object.entries(style ?? {}).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b))); const key = JSON.stringify(normalized); if (!ids.has(key)) { ids.set(key, styles.length); styles.push(normalized); } return ids.get(key); };
+  const idFor = style => { normalizeCurrencyStyle(style ?? {}); const normalized = Object.fromEntries(Object.entries(style ?? {}).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b))); const key = JSON.stringify(normalized); if (!ids.has(key)) { ids.set(key, styles.length); styles.push(normalized); } return ids.get(key); };
   for (const sheet of workbook.sheets) for (const cell of sheet.cells.values()) idFor(cell.style);
   const formats = new Map(), fonts = [], fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'], xfs = [];
   styles.forEach((s, i) => {
     const size = (s.fontSize ?? 13) * 0.75; fonts.push(`<font>${s.bold ? '<b/>' : ''}${s.italic ? '<i/>' : ''}${s.underline ? '<u/>' : ''}<sz val="${size}"/><color rgb="${colorARGB(s.color || '#293b32')}"/><name val="${escapeXML(s.fontFamily?.split(',')[0] || 'Aptos')}"/></font>`);
     let fillId = 0; if (s.fill) { fillId = fills.length; fills.push(`<fill><patternFill patternType="solid"><fgColor rgb="${colorARGB(s.fill)}"/><bgColor indexed="64"/></patternFill></fill>`); }
     let fmt = s.format || 'general'; const d = Math.max(0, Math.min(10, s.decimals ?? (fmt === 'percent' ? 1 : fmt === 'number' ? 2 : 0))), decimals = d ? '.' + '0'.repeat(d) : '';
-    fmt = fmt === 'general' ? 'General' : fmt === 'currency' ? '$#,##0' + decimals : fmt === 'percent' ? '0' + decimals + '%' : fmt === 'integer' ? '#,##0' : fmt === 'number' ? '#,##0' + decimals : fmt === 'date' ? 'mmm d, yyyy' : fmt;
+    fmt = fmt === 'general' ? 'General' : fmt === 'currency' ? currencyNumberFormat({ ...s, decimals: d }) : fmt === 'percent' ? '0' + decimals + '%' : fmt === 'integer' ? '#,##0' : fmt === 'number' ? '#,##0' + decimals : fmt === 'date' ? 'mmm d, yyyy' : fmt;
     let numFmtId = 0; if (fmt !== 'General') { if (!formats.has(fmt)) formats.set(fmt, 164 + formats.size); numFmtId = formats.get(fmt); }
     xfs.push(`<xf numFmtId="${numFmtId}" fontId="${i}" fillId="${fillId}" borderId="${s.border ? 1 : 0}" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1" applyAlignment="1"><alignment vertical="center"${s.align ? ` horizontal="${s.align}"` : ''}${s.wrap ? ' wrapText="1"' : ''}/></xf>`);
   });
@@ -163,7 +164,7 @@ export async function importXLSX(buffer, title = 'Imported workbook') {
     const cssColor = el => { const rgb = el?.getAttribute('rgb'); return rgb ? '#' + rgb.slice(-6) : undefined; };
     styles = xfs.map(xf => {
       const font = fonts[+xf.getAttribute('fontId')], fill = fills[+xf.getAttribute('fillId')], alignment = firstElement(xf, 'alignment'), id = +xf.getAttribute('numFmtId');
-      const style = { format: formats.get(id) || builtinFormats[id] || 'general' };
+      const style = styleFromNumberFormat(formats.get(id) || builtinFormats[id] || 'general');
       if (font) { style.bold = !!firstElement(font, 'b'); style.italic = !!firstElement(font, 'i'); style.underline = !!firstElement(font, 'u'); const fs = firstElement(font, 'sz')?.getAttribute('val'); if (fs) style.fontSize = Math.min(72, +fs / 0.75); const color = cssColor(firstElement(font, 'color')); if (color) style.color = color; }
       const color = fill ? cssColor(firstElement(fill, 'fgColor')) : null; if (color && firstElement(fill, 'patternFill')?.getAttribute('patternType') === 'solid') style.fill = color;
       if (alignment) { const a = alignment.getAttribute('horizontal'); if (['left', 'center', 'right'].includes(a)) style.align = a; style.wrap = alignment.getAttribute('wrapText') === '1'; }
