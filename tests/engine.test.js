@@ -105,3 +105,21 @@ test('invalid currency input is rejected before cell changes or persisted restor
   const bad = wb.toJSON(); bad.sheets[0].cells[0][1].style.currency = 'ZZZ';
   assert.throws(() => Workbook.fromJSON(bad), RangeError);
 });
+
+
+test('sheet structural grounding revision follows inserts, deletes, sorts and snapshot Undo/Redo only', () => {
+ const wb=make();let sheet=wb.activeSheet;
+ wb.setCell(sheet,0,0,{raw:'Header'});wb.setCell(sheet,1,0,{raw:'2'});wb.setCell(sheet,2,0,{raw:'1'});
+ assert.equal(sheet.grounding_structure_revision,0);
+ wb.applyStyle(sheet,{r1:1,c1:0,r2:2,c2:0},{format:'currency',currency:'EUR'});
+ assert.equal(sheet.grounding_structure_revision,0);
+ wb.structuralEdit(sheet,'row',1,1);assert.equal(sheet.grounding_structure_revision,1);
+ wb.undo();sheet=wb.activeSheet;assert.equal(sheet.grounding_structure_revision,0);
+ wb.redo();sheet=wb.activeSheet;assert.equal(sheet.grounding_structure_revision,1);
+ wb.structuralEdit(sheet,'row',1,-1);assert.equal(sheet.grounding_structure_revision,2);
+ const prior=wb.undoStack.length;wb.sort(sheet,{r1:0,c1:0,r2:2,c2:0},0,false,true);
+ assert.equal(sheet.grounding_structure_revision,3);assert.equal(wb.undoStack.length,prior+1);
+ assert.equal(sheet.raw(1,0),'1');wb.undo();sheet=wb.activeSheet;assert.equal(sheet.grounding_structure_revision,2);assert.equal(sheet.raw(1,0),'2');
+ const legacy=wb.toJSON();delete legacy.sheets[0].grounding_structure_revision;assert.equal(Workbook.fromJSON(legacy).activeSheet.grounding_structure_revision,0);
+ for(const value of [-1,1.5,'1']){const bad=wb.toJSON();bad.sheets[0].grounding_structure_revision=value;assert.throws(()=>Workbook.fromJSON(bad));}
+});
